@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: task-manager
+    runtime: python3
+    buildCommand: "npm install && npm run build"
+    startCommand: "cd backend && gunicorn app:app"
+    rootDir: .
+    envVars:
+      - key: FLASK_ENV
+        value: production
+      - key: SECRET_KEY
+        fromSecret: flask-secret-key  # Optional, if using secrets
