@@ -6,7 +6,7 @@ import datetime
 import time
 import os
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='../build', static_url_path='/')
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev_secret_key')
 CORS(app)
 
@@ -182,6 +182,14 @@ def delete_note(note_id):
     conn.commit()
     conn.close()
     return "", 204
+
+@app.route('/')
+def serve_index():
+    return app.send_static_file('index.html')
+
+@app.route('/<path:path>')
+def catch_all(path):
+    return app.send_static_file('index.html')
 
 # Add table creation for projects and notes at the bottom
 if __name__ == "__main__":
