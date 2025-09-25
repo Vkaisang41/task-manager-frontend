@@ -1,61 +1,103 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 
 function Projects() {
   const [projects, setProjects] = useState([]);
   const [input, setInput] = useState("");
   const [category, setCategory] = useState("Work");
-  const [filter, setFilter] = useState("all");
   const [editingIdx, setEditingIdx] = useState(null);
   const [editValue, setEditValue] = useState("");
+  const [editCategory, setEditCategory] = useState("Work");
+  const [filter, setFilter] = useState("all");
+
+  useEffect(() => {
+    fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8000'}/api/projects`)
+      .then((res) => res.json())
+      .then((data) => setProjects(Array.isArray(data) ? data : []));
+  }, []);
 
   const handleAdd = (e) => {
     e.preventDefault();
     if (input.trim()) {
-      setProjects([
-        ...projects,
-        {
+      fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8000'}/api/projects`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
           name: input.trim(),
           category,
-          tasks: [],
-        },
-      ]);
-      setInput("");
-      setCategory("Work");
+          pinned: false,
+        }),
+      })
+        .then((res) => res.json())
+        .then((newProject) => {
+          setProjects([...projects, newProject]);
+          setInput("");
+          setCategory("Work");
+        });
     }
   };
 
-  const handleDelete = (idx) => {
-    if (window.confirm("Delete this project?")) {
-      setProjects(projects.filter((_, i) => i !== idx));
-    }
+  const handleDelete = (id) => {
+    fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8000'}/api/projects/${id}`, {
+      method: "DELETE",
+    }).then(() => {
+      setProjects(projects.filter((project) => project.id !== id));
+    });
   };
 
   const handleEdit = (idx) => {
     setEditingIdx(idx);
     setEditValue(projects[idx].name);
+    setEditCategory(projects[idx].category);
   };
 
   const handleEditSave = (idx) => {
-    const updated = [...projects];
-    updated[idx].name = editValue;
-    setProjects(updated);
-    setEditingIdx(null);
-    setEditValue("");
+    const project = projects[idx];
+    fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8000'}/api/projects/${project.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: editValue,
+        category: editCategory,
+        pinned: project.pinned || false,
+      }),
+    })
+      .then((res) => res.json())
+      .then((updatedProject) => {
+        const updated = [...projects];
+        updated[idx] = updatedProject;
+        setProjects(updated);
+        setEditingIdx(null);
+        setEditValue("");
+      });
   };
 
-  // Filtering
-  const filteredProjects = projects.filter((project) => {
-    if (filter === "all") return true;
-    return project.category === filter;
-  });
+  const handlePin = (idx) => {
+    const project = projects[idx];
+    fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8000'}/api/projects/${project.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ...project,
+        pinned: !project.pinned,
+      }),
+    })
+      .then((res) => res.json())
+      .then((updatedProject) => {
+        const updated = [...projects];
+        updated[idx] = updatedProject;
+        setProjects(updated);
+      });
+  };
+
+  // Filter and sort: pinned projects first, then by filter
+  const filteredProjects = projects
+    .filter((project) => filter === "all" || project.category === filter)
+    .sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
 
   return (
     <div>
       <h1>Projects</h1>
-      <form
-        onSubmit={handleAdd}
-        style={{ display: "flex", gap: 8, flexWrap: "wrap" }}
-      >
+      <form onSubmit={handleAdd} style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         <input
           type="text"
           placeholder="Add a new project"
@@ -87,130 +129,52 @@ function Projects() {
       </div>
 
       <ul>
-        {filteredProjects.map((project, idx) => {
-          // Example progress: random for demo
-          const totalTasks = project.tasks.length || 5;
-          const completedTasks = Math.floor(Math.random() * (totalTasks + 1));
-          const progress = Math.round((completedTasks / totalTasks) * 100);
-
-          return (
-            <li className="card" key={idx} style={{ marginBottom: 16 }}>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                }}
-              >
-                {editingIdx === idx ? (
-                  <input
-                    type="text"
-                    value={editValue}
-                    onChange={(e) => setEditValue(e.target.value)}
-                    style={{ marginRight: "12px", flex: 1 }}
-                  />
-                ) : (
-                  <span style={{ fontWeight: "bold" }}>{project.name}</span>
-                )}
-                <span
-                  style={{
-                    marginLeft: 12,
-                    color: "#61dafb",
-                    textTransform: "capitalize",
-                  }}
+        {filteredProjects.map((project, idx) => (
+          <li key={project.id} className="card" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: project.pinned ? "#353b48" : undefined }}>
+            {editingIdx === idx ? (
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1 }}>
+                <input
+                  type="text"
+                  value={editValue}
+                  onChange={(e) => setEditValue(e.target.value)}
+                  style={{ flex: 2 }}
+                />
+                <select
+                  value={editCategory}
+                  onChange={(e) => setEditCategory(e.target.value)}
+                  style={{ flex: 1 }}
                 >
-                  {project.category}
+                  <option value="Work">Work</option>
+                  <option value="School">School</option>
+                  <option value="Personal">Personal</option>
+                </select>
+                <button className="button" style={{ background: "#27ae60", color: "#fff", marginRight: "8px" }} onClick={() => handleEditSave(idx)}>
+                  Save
+                </button>
+                <button className="button" style={{ background: "#7f8c8d", color: "#fff" }} onClick={() => setEditingIdx(null)}>
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <>
+                <span style={{ flex: 1 }}>
+                  {project.name} ({project.category})
                 </span>
                 <div>
-                  {editingIdx === idx ? (
-                    <>
-                      <button
-                        className="button"
-                        style={{
-                          background: "#27ae60",
-                          color: "#fff",
-                          marginRight: "8px",
-                          padding: "6px 14px",
-                        }}
-                        onClick={() => handleEditSave(idx)}
-                      >
-                        Save
-                      </button>
-                      <button
-                        className="button"
-                        style={{
-                          background: "#7f8c8d",
-                          color: "#fff",
-                          padding: "6px 14px",
-                        }}
-                        onClick={() => setEditingIdx(null)}
-                      >
-                        Cancel
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <button
-                        className="button"
-                        style={{
-                          background: "#2980b9",
-                          color: "#fff",
-                          marginRight: "8px",
-                          padding: "6px 14px",
-                        }}
-                        onClick={() => handleEdit(idx)}
-                      >
-                        Edit
-                      </button>
-                      <button
-                        className="button"
-                        style={{
-                          background: "#e74c3c",
-                          color: "#fff",
-                          padding: "6px 14px",
-                        }}
-                        onClick={() => handleDelete(idx)}
-                      >
-                        Delete
-                      </button>
-                    </>
-                  )}
+                  <button className="button" style={{ background: "#f39c12", color: "#fff", marginRight: "8px" }} onClick={() => handlePin(idx)}>
+                    {project.pinned ? "Unpin" : "Pin"}
+                  </button>
+                  <button className="button" style={{ background: "#2980b9", color: "#fff", marginRight: "8px" }} onClick={() => handleEdit(idx)}>
+                    Edit
+                  </button>
+                  <button className="button" style={{ background: "#e74c3c", color: "#fff" }} onClick={() => handleDelete(project.id)}>
+                    Delete
+                  </button>
                 </div>
-              </div>
-              {/* Progress Bar */}
-              <div style={{ marginTop: 12 }}>
-                <div
-                  style={{
-                    background: "#353b48",
-                    borderRadius: 6,
-                    height: 12,
-                    width: "100%",
-                  }}
-                >
-                  <div
-                    style={{
-                      background: "#61dafb",
-                      width: `${progress}%`,
-                      height: "100%",
-                      borderRadius: 6,
-                      transition: "width 0.5s",
-                    }}
-                  />
-                </div>
-                <span
-                  style={{
-                    fontSize: "0.9rem",
-                    color: "#b2becd",
-                    display: "block",
-                    marginTop: 4,
-                  }}
-                >
-                  {completedTasks} of {totalTasks} tasks done ({progress}%)
-                </span>
-              </div>
-            </li>
-          );
-        })}
+              </>
+            )}
+          </li>
+        ))}
       </ul>
     </div>
   );

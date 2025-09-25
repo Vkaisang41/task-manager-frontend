@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 
 function Tasks() {
   const [tasks, setTasks] = useState([]);
@@ -10,27 +10,44 @@ function Tasks() {
   const [editingIdx, setEditingIdx] = useState(null);
   const [editValue, setEditValue] = useState("");
 
+  // Fetch tasks from backend on mount
+  useEffect(() => {
+    fetch("http://127.0.0.1:8000/api/notes")
+      .then(res => res.json())
+      .then(data => setTasks(data));
+  }, []);
+
   const handleAdd = (e) => {
     e.preventDefault();
     if (input.trim()) {
-      setTasks([
-        ...tasks,
-        {
+      fetch("http://127.0.0.1:8000/api/notes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
           text: input.trim(),
           completed: false,
           priority,
           dueDate,
-        },
-      ]);
-      setInput("");
-      setPriority("Low");
-      setDueDate("");
+        }),
+      })
+        .then(res => res.json())
+        .then(newTask => {
+          setTasks([...tasks, newTask]);
+          setInput("");
+          setPriority("Low");
+          setDueDate("");
+        });
     }
   };
 
   const handleDelete = (idx) => {
     if (window.confirm("Are you sure you want to delete this task?")) {
-      setTasks(tasks.filter((_, i) => i !== idx));
+      fetch(`http://127.0.0.1:8000/api/notes/${tasks[idx].id}`, {
+        method: "DELETE",
+      })
+        .then(() => {
+          setTasks(tasks.filter((_, i) => i !== idx));
+        });
     }
   };
 
@@ -42,15 +59,31 @@ function Tasks() {
   const handleEditSave = (idx) => {
     const updated = [...tasks];
     updated[idx].text = editValue;
-    setTasks(updated);
-    setEditingIdx(null);
-    setEditValue("");
+    fetch(`http://127.0.0.1:8000/api/notes/${tasks[idx].id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(updated[idx]),
+    })
+      .then(res => res.json())
+      .then(() => {
+        setTasks(updated);
+        setEditingIdx(null);
+        setEditValue("");
+      });
   };
 
   const handleToggleComplete = (idx) => {
     const updated = [...tasks];
     updated[idx].completed = !updated[idx].completed;
-    setTasks(updated);
+    fetch(`http://127.0.0.1:8000/api/notes/${tasks[idx].id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(updated[idx]),
+    })
+      .then(res => res.json())
+      .then(() => {
+        setTasks(updated);
+      });
   };
 
   // Filtering

@@ -1,37 +1,230 @@
-from flask import Flask, jsonify
+from flask import Flask, request, jsonify
 from flask_cors import CORS
-from models import db
-from config import Config
-from routes import api
+from werkzeug.security import generate_password_hash, check_password_hash
+import sqlite3
+import datetime
+import time
+import os
 
-def create_app():
-    app = Flask(__name__)
-    app.config.from_object(Config)
+app = Flask(__name__)
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev_secret_key')
+CORS(app)
 
-    db.init_app(app)
-    CORS(app)
+def get_db():
+    conn = sqlite3.connect("tasks.db")
+    conn.row_factory = sqlite3.Row
+    return conn
 
-    app.register_blueprint(api, url_prefix='/api')
+# User registration endpoint
+@app.route('/api/register', methods=['POST'])
+def register():
+    data = request.get_json()
+    conn = get_db()
+    # Check if user exists
+    user = conn.execute("SELECT * FROM users WHERE username=?", (data['username'],)).fetchone()
+    if user:
+        conn.close()
+        return jsonify({"msg": "Username already exists"}), 409
+    password_hash = generate_password_hash(data['password'])
+    conn.execute("INSERT INTO users (username, password) VALUES (?, ?)", (data['username'], password_hash))
+    conn.commit()
+    conn.close()
+    return jsonify({"msg": "User registered"}), 201
 
-    @app.route('/', methods=['GET'])
-    def root():
-        return jsonify({
-            "message": "Task Manager API",
-            "endpoints": {
-                "ping": "GET /api/ping",
-                "users": "GET/POST /api/users, GET/PUT/DELETE /api/users/<id>",
-                "projects": "GET/POST /api/projects, GET/PUT/DELETE /api/projects/<id>",
-                "tasks": "GET/POST /api/tasks, GET/PUT/DELETE /api/tasks/<id>",
-                "notes": "GET/POST /api/notes, GET/PUT/DELETE /api/notes/<id>"
-            }
-        })
+# User login endpoint
+@app.route('/api/login', methods=['POST'])
+def login():
+    data = request.get_json()
+    if not data:
+        return jsonify({"msg": "Invalid request"}), 400
+    conn = get_db()
+    user = conn.execute("SELECT * FROM users WHERE username=?", (data['username'],)).fetchone()
+    conn.close()
+    if user and check_password_hash(user['password'], data['password']):
+        token = f"token_{user['id']}_{int(time.time())}"
+        return jsonify({"token": token, "user": {"id": user['id'], "username": user['username']}})
+    return jsonify({"msg": "Wrong password"}), 401
 
-    with app.app_context():
-        db.create_all()
+# Example token decode helper (for protected endpoints)
+def decode_token(token):
+    try:
+        parts = token.split('_')
+        if len(parts) >= 2 and parts[0] == 'token':
+            return int(parts[1])
+        return None
+    except Exception:
+        return None
 
-    return app
+# Tasks endpoints
+@app.route("/api/tasks", methods=["GET"])
+def get_tasks():
+    conn = get_db()
+    tasks = conn.execute("SELECT * FROM tasks").fetchall()
+    conn.close()
+    return jsonify([dict(row) for row in tasks])
 
-app = create_app()
+@app.route("/api/tasks", methods=["POST"])
+def add_task():
+    data = request.get_json()
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO tasks (text, completed, priority, dueDate) VALUES (?, ?, ?, ?)",
+        (data["text"], int(data["completed"]), data["priority"], data["dueDate"])
+    )
+    conn.commit()
+    new_id = cur.lastrowid
+    conn.close()
+    return jsonify({"id": new_id, **data}), 201
 
-if __name__ == '__main__':
-    app.run(debug=True, port=8001)
+@app.route("/api/tasks/<int:task_id>", methods=["PUT"])
+def update_task(task_id):
+    data = request.get_json()
+    conn = get_db()
+    conn.execute(
+        "UPDATE tasks SET text=?, completed=?, priority=?, dueDate=? WHERE id=?",
+        (data["text"], int(data["completed"]), data["priority"], data["dueDate"], task_id)
+    )
+    conn.commit()
+    conn.close()
+    return jsonify({"id": task_id, **data})
+
+@app.route("/api/tasks/<int:task_id>", methods=["DELETE"])
+def delete_task(task_id):
+    conn = get_db()
+    conn.execute("DELETE FROM tasks WHERE id=?", (task_id,))
+    conn.commit()
+    conn.close()
+    return "", 204
+
+# Projects endpoints
+@app.route("/api/projects", methods=["GET"])
+def get_projects():
+    conn = get_db()
+    projects = conn.execute("SELECT * FROM projects").fetchall()
+    conn.close()
+    return jsonify([dict(row) for row in projects])
+
+@app.route("/api/projects", methods=["POST"])
+def add_project():
+    data = request.get_json()
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO projects (name, category, pinned) VALUES (?, ?, ?)",
+        (data["name"], data["category"], int(data.get("pinned", False)))
+    )
+    conn.commit()
+    new_id = cur.lastrowid
+    conn.close()
+    return jsonify({"id": new_id, **data}), 201
+
+@app.route("/api/projects/<int:project_id>", methods=["PUT"])
+def update_project(project_id):
+    data = request.get_json()
+    conn = get_db()
+    conn.execute(
+        "UPDATE projects SET name=?, category=?, pinned=? WHERE id=?",
+        (data["name"], data["category"], int(data.get("pinned", False)), project_id)
+    )
+    conn.commit()
+    updated = conn.execute("SELECT * FROM projects WHERE id=?", (project_id,)).fetchone()
+    conn.close()
+    return jsonify(dict(updated))
+
+@app.route("/api/projects/<int:project_id>", methods=["DELETE"])
+def delete_project(project_id):
+    conn = get_db()
+    conn.execute("DELETE FROM projects WHERE id=?", (project_id,))
+    conn.commit()
+    conn.close()
+    return "", 204
+
+# Notes endpoints
+@app.route("/api/notes", methods=["GET"])
+def get_notes():
+    conn = get_db()
+    notes = conn.execute("SELECT * FROM notes").fetchall()
+    conn.close()
+    return jsonify([dict(row) for row in notes])
+
+@app.route("/api/notes", methods=["POST"])
+def add_note():
+    data = request.get_json()
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO notes (text, pinned) VALUES (?, ?)",
+        (data["text"], int(data.get("pinned", False)))
+    )
+    conn.commit()
+    new_id = cur.lastrowid
+    conn.close()
+    return jsonify({"id": new_id, **data}), 201
+
+@app.route("/api/notes/<int:note_id>", methods=["PUT"])
+def update_note(note_id):
+    data = request.get_json()
+    conn = get_db()
+    conn.execute(
+        "UPDATE notes SET text=?, pinned=? WHERE id=?",
+        (data["text"], int(data.get("pinned", False)), note_id)
+    )
+    conn.commit()
+    updated = conn.execute("SELECT * FROM notes WHERE id=?", (note_id,)).fetchone()
+    conn.close()
+    return jsonify(dict(updated))
+
+@app.route("/api/notes/<int:note_id>", methods=["DELETE"])
+def delete_note(note_id):
+    conn = get_db()
+    conn.execute("DELETE FROM notes WHERE id=?", (note_id,))
+    conn.commit()
+    conn.close()
+    return "", 204
+
+# Add table creation for projects and notes at the bottom
+if __name__ == "__main__":
+    conn = sqlite3.connect("tasks.db")
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS tasks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            text TEXT NOT NULL,
+            completed INTEGER NOT NULL,
+            priority TEXT,
+            dueDate TEXT
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS projects (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            category TEXT,
+            pinned INTEGER DEFAULT 0
+        )
+    """)
+    # Migration: add pinned column if missing
+    try:
+        conn.execute("ALTER TABLE projects ADD COLUMN pinned INTEGER DEFAULT 0;")
+    except sqlite3.OperationalError:
+        pass  # Column already exists
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS notes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            text TEXT NOT NULL,
+            pinned INTEGER NOT NULL
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL UNIQUE,
+            password TEXT NOT NULL
+        )
+    """)
+    conn.close()
+    app.run(port=8000)
+
+if __name__ == "__main__":
+    app.run(port=8000)
