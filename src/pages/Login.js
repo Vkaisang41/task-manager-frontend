@@ -13,7 +13,7 @@ function Login({ onLogin }) {
     setError("");
     if (username && password) {
       try {
-        const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8000'}/api/login`, {
+        const response = await fetch('/api/login', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

@@ -10,7 +10,7 @@ function Projects() {
   const [filter, setFilter] = useState("all");
 
   useEffect(() => {
-    fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8000'}/api/projects`)
+    fetch('/api/projects')
       .then((res) => res.json())
       .then((data) => setProjects(Array.isArray(data) ? data : []));
   }, []);
@@ -18,7 +18,7 @@ function Projects() {
   const handleAdd = (e) => {
     e.preventDefault();
     if (input.trim()) {
-      fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8000'}/api/projects`, {
+      fetch('/api/projects', {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -37,7 +37,7 @@ function Projects() {
   };
 
   const handleDelete = (id) => {
-    fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8000'}/api/projects/${id}`, {
+    fetch(`/api/projects/${id}`, {
       method: "DELETE",
     }).then(() => {
       setProjects(projects.filter((project) => project.id !== id));
@@ -52,7 +52,7 @@ function Projects() {
 
   const handleEditSave = (idx) => {
     const project = projects[idx];
-    fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8000'}/api/projects/${project.id}`, {
+    fetch(`/api/projects/${project.id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -73,7 +73,7 @@ function Projects() {
 
   const handlePin = (idx) => {
     const project = projects[idx];
-    fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8000'}/api/projects/${project.id}`, {
+    fetch(`/api/projects/${project.id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

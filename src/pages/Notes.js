@@ -5,7 +5,7 @@ function Notes() {
   const [input, setInput] = useState("");
 
   useEffect(() => {
-    fetch("http://127.0.0.1:8000/api/notes")
+    fetch("/api/notes")
       .then((res) => res.json())
       .then((data) => setNotes(Array.isArray(data) ? data : []));
   }, []);
@@ -13,7 +13,7 @@ function Notes() {
   const handleAdd = (e) => {
     e.preventDefault();
     if (input.trim()) {
-      fetch("http://127.0.0.1:8000/api/notes", {
+      fetch("/api/notes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -30,7 +30,7 @@ function Notes() {
   };
 
   const handleDelete = (id) => {
-    fetch(`http://127.0.0.1:8000/api/notes/${id}`, {
+    fetch(`/api/notes/${id}`, {
       method: "DELETE",
     }).then(() => {
       setNotes(notes.filter((note) => note.id !== id));
@@ -39,7 +39,7 @@ function Notes() {
 
   const handlePin = (idx) => {
     const note = notes[idx];
-    fetch(`http://127.0.0.1:8000/api/notes/${note.id}`, {
+    fetch(`/api/notes/${note.id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
