@@ -9,9 +9,14 @@ app = Flask(__name__, static_folder='../build', static_url_path='/')
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev_secret_key')
 CORS(app)
 
-# ----------------------
-# Database initialization
-# ----------------------
+
+# ---------------- DATABASE ----------------
+def get_db():
+    conn = sqlite3.connect("tasks.db")
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
 def init_db():
     conn = sqlite3.connect("tasks.db")
     conn.execute("""
@@ -51,22 +56,17 @@ def init_db():
             password TEXT NOT NULL
         )
     """)
+    conn.commit()
     conn.close()
 
-# Call DB init at startup
-init_db()
 
-# ----------------------
-# DB connection helper
-# ----------------------
-def get_db():
-    conn = sqlite3.connect("tasks.db")
-    conn.row_factory = sqlite3.Row
-    return conn
+# Run DB setup on first request
+@app.before_first_request
+def create_tables():
+    init_db()
 
-# ----------------------
-# Auth Endpoints
-# ----------------------
+
+# ---------------- AUTH ----------------
 @app.route('/api/register', methods=['POST'])
 def register():
     data = request.get_json()
@@ -75,11 +75,13 @@ def register():
     if user:
         conn.close()
         return jsonify({"msg": "Username already exists"}), 409
+
     password_hash = generate_password_hash(data['password'])
     conn.execute("INSERT INTO users (username, password) VALUES (?, ?)", (data['username'], password_hash))
     conn.commit()
     conn.close()
     return jsonify({"msg": "User registered"}), 201
+
 
 @app.route('/api/login', methods=['POST'])
 def login():
@@ -94,6 +96,7 @@ def login():
         return jsonify({"token": token, "user": {"id": user['id'], "username": user['username']}})
     return jsonify({"msg": "Wrong password"}), 401
 
+
 def decode_token(token):
     try:
         parts = token.split('_')
@@ -103,15 +106,15 @@ def decode_token(token):
     except Exception:
         return None
 
-# ----------------------
-# Tasks Endpoints
-# ----------------------
+
+# ---------------- TASKS ----------------
 @app.route("/api/tasks", methods=["GET"])
 def get_tasks():
     conn = get_db()
     tasks = conn.execute("SELECT * FROM tasks").fetchall()
     conn.close()
     return jsonify([dict(row) for row in tasks])
+
 
 @app.route("/api/tasks", methods=["POST"])
 def add_task():
@@ -127,6 +130,7 @@ def add_task():
     conn.close()
     return jsonify({"id": new_id, **data}), 201
 
+
 @app.route("/api/tasks/<int:task_id>", methods=["PUT"])
 def update_task(task_id):
     data = request.get_json()
@@ -139,6 +143,7 @@ def update_task(task_id):
     conn.close()
     return jsonify({"id": task_id, **data})
 
+
 @app.route("/api/tasks/<int:task_id>", methods=["DELETE"])
 def delete_task(task_id):
     conn = get_db()
@@ -147,15 +152,15 @@ def delete_task(task_id):
     conn.close()
     return "", 204
 
-# ----------------------
-# Projects Endpoints
-# ----------------------
+
+# ---------------- PROJECTS ----------------
 @app.route("/api/projects", methods=["GET"])
 def get_projects():
     conn = get_db()
     projects = conn.execute("SELECT * FROM projects").fetchall()
     conn.close()
     return jsonify([dict(row) for row in projects])
+
 
 @app.route("/api/projects", methods=["POST"])
 def add_project():
@@ -171,6 +176,7 @@ def add_project():
     conn.close()
     return jsonify({"id": new_id, **data}), 201
 
+
 @app.route("/api/projects/<int:project_id>", methods=["PUT"])
 def update_project(project_id):
     data = request.get_json()
@@ -184,6 +190,7 @@ def update_project(project_id):
     conn.close()
     return jsonify(dict(updated))
 
+
 @app.route("/api/projects/<int:project_id>", methods=["DELETE"])
 def delete_project(project_id):
     conn = get_db()
@@ -192,15 +199,15 @@ def delete_project(project_id):
     conn.close()
     return "", 204
 
-# ----------------------
-# Notes Endpoints
-# ----------------------
+
+# ---------------- NOTES ----------------
 @app.route("/api/notes", methods=["GET"])
 def get_notes():
     conn = get_db()
     notes = conn.execute("SELECT * FROM notes").fetchall()
     conn.close()
     return jsonify([dict(row) for row in notes])
+
 
 @app.route("/api/notes", methods=["POST"])
 def add_note():
@@ -216,6 +223,7 @@ def add_note():
     conn.close()
     return jsonify({"id": new_id, **data}), 201
 
+
 @app.route("/api/notes/<int:note_id>", methods=["PUT"])
 def update_note(note_id):
     data = request.get_json()
@@ -229,6 +237,7 @@ def update_note(note_id):
     conn.close()
     return jsonify(dict(updated))
 
+
 @app.route("/api/notes/<int:note_id>", methods=["DELETE"])
 def delete_note(note_id):
     conn = get_db()
@@ -237,19 +246,18 @@ def delete_note(note_id):
     conn.close()
     return "", 204
 
-# ----------------------
-# React Frontend Serving
-# ----------------------
+
+# ---------------- FRONTEND ----------------
 @app.route('/')
 def serve_index():
     return app.send_static_file('index.html')
+
 
 @app.route('/<path:path>')
 def catch_all(path):
     return app.send_static_file('index.html')
 
-# ----------------------
-# Local run (only dev)
-# ----------------------
+
+# ---------------- LOCAL DEV ----------------
 if __name__ == "__main__":
     app.run(port=8000, debug=True)
