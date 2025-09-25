@@ -60,10 +60,8 @@ def init_db():
     conn.close()
 
 
-# Run DB setup on first request
-@app.before_first_request
-def create_tables():
-    init_db()
+# Initialize database
+init_db()
 
 
 # ---------------- AUTH ----------------
