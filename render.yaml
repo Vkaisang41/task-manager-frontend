@@ -2,6 +2,7 @@ services:
   - type: web
     name: task-manager
     runtime: python3
+    buildCommand: "npm install && npm run build"
     startCommand: "cd backend && gunicorn app:app"
     rootDir: .
     envVars:
