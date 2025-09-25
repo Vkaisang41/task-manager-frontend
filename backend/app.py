@@ -2,7 +2,6 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from werkzeug.security import generate_password_hash, check_password_hash
 import sqlite3
-import datetime
 import time
 import os
 
@@ -10,17 +9,68 @@ app = Flask(__name__, static_folder='../build', static_url_path='/')
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev_secret_key')
 CORS(app)
 
+# ----------------------
+# Database initialization
+# ----------------------
+def init_db():
+    conn = sqlite3.connect("tasks.db")
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS tasks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            text TEXT NOT NULL,
+            completed INTEGER NOT NULL,
+            priority TEXT,
+            dueDate TEXT
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS projects (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            category TEXT,
+            pinned INTEGER DEFAULT 0
+        )
+    """)
+    # Migration: add pinned column if missing
+    try:
+        conn.execute("ALTER TABLE projects ADD COLUMN pinned INTEGER DEFAULT 0;")
+    except sqlite3.OperationalError:
+        pass  # Column already exists
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS notes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            text TEXT NOT NULL,
+            pinned INTEGER NOT NULL
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL UNIQUE,
+            password TEXT NOT NULL
+        )
+    """)
+    conn.close()
+
+# Call DB init at startup
+init_db()
+
+# ----------------------
+# DB connection helper
+# ----------------------
 def get_db():
     conn = sqlite3.connect("tasks.db")
     conn.row_factory = sqlite3.Row
     return conn
 
-# User registration endpoint
+# ----------------------
+# Auth Endpoints
+# ----------------------
 @app.route('/api/register', methods=['POST'])
 def register():
     data = request.get_json()
     conn = get_db()
-    # Check if user exists
     user = conn.execute("SELECT * FROM users WHERE username=?", (data['username'],)).fetchone()
     if user:
         conn.close()
@@ -31,7 +81,6 @@ def register():
     conn.close()
     return jsonify({"msg": "User registered"}), 201
 
-# User login endpoint
 @app.route('/api/login', methods=['POST'])
 def login():
     data = request.get_json()
@@ -45,7 +94,6 @@ def login():
         return jsonify({"token": token, "user": {"id": user['id'], "username": user['username']}})
     return jsonify({"msg": "Wrong password"}), 401
 
-# Example token decode helper (for protected endpoints)
 def decode_token(token):
     try:
         parts = token.split('_')
@@ -55,7 +103,9 @@ def decode_token(token):
     except Exception:
         return None
 
-# Tasks endpoints
+# ----------------------
+# Tasks Endpoints
+# ----------------------
 @app.route("/api/tasks", methods=["GET"])
 def get_tasks():
     conn = get_db()
@@ -97,7 +147,9 @@ def delete_task(task_id):
     conn.close()
     return "", 204
 
-# Projects endpoints
+# ----------------------
+# Projects Endpoints
+# ----------------------
 @app.route("/api/projects", methods=["GET"])
 def get_projects():
     conn = get_db()
@@ -140,7 +192,9 @@ def delete_project(project_id):
     conn.close()
     return "", 204
 
-# Notes endpoints
+# ----------------------
+# Notes Endpoints
+# ----------------------
 @app.route("/api/notes", methods=["GET"])
 def get_notes():
     conn = get_db()
@@ -183,6 +237,9 @@ def delete_note(note_id):
     conn.close()
     return "", 204
 
+# ----------------------
+# React Frontend Serving
+# ----------------------
 @app.route('/')
 def serve_index():
     return app.send_static_file('index.html')
@@ -191,48 +248,8 @@ def serve_index():
 def catch_all(path):
     return app.send_static_file('index.html')
 
-# Add table creation for projects and notes at the bottom
+# ----------------------
+# Local run (only dev)
+# ----------------------
 if __name__ == "__main__":
-    conn = sqlite3.connect("tasks.db")
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS tasks (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            text TEXT NOT NULL,
-            completed INTEGER NOT NULL,
-            priority TEXT,
-            dueDate TEXT
-        )
-    """)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS projects (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            category TEXT,
-            pinned INTEGER DEFAULT 0
-        )
-    """)
-    # Migration: add pinned column if missing
-    try:
-        conn.execute("ALTER TABLE projects ADD COLUMN pinned INTEGER DEFAULT 0;")
-    except sqlite3.OperationalError:
-        pass  # Column already exists
-
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS notes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            text TEXT NOT NULL,
-            pinned INTEGER NOT NULL
-        )
-    """)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT NOT NULL UNIQUE,
-            password TEXT NOT NULL
-        )
-    """)
-    conn.close()
-    app.run(port=8000)
-
-if __name__ == "__main__":
-    app.run(port=8000)
+    app.run(port=8000, debug=True)
