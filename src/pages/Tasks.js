@@ -12,7 +12,12 @@ function Tasks() {
 
   // Fetch tasks from backend on mount
   useEffect(() => {
-    fetch("https://task-manager-backend-407e.onrender.com/api/tasks")
+    const token = localStorage.getItem('token');
+    fetch("https://task-manager-backend-407e.onrender.com/api/tasks", {
+      headers: {
+        'Authorization': token
+      }
+    })
       .then(res => res.json())
       .then(data => setTasks(data));
   }, []);
@@ -20,9 +25,13 @@ function Tasks() {
   const handleAdd = (e) => {
     e.preventDefault();
     if (input.trim()) {
+      const token = localStorage.getItem('token');
       fetch("https://task-manager-backend-407e.onrender.com/api/tasks", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          'Authorization': token
+        },
         body: JSON.stringify({
           text: input.trim(),
           completed: false,
@@ -42,8 +51,12 @@ function Tasks() {
 
   const handleDelete = (idx) => {
     if (window.confirm("Are you sure you want to delete this task?")) {
+      const token = localStorage.getItem('token');
       fetch(`https://task-manager-backend-407e.onrender.com/api/tasks/${tasks[idx].id}`, {
         method: "DELETE",
+        headers: {
+          'Authorization': token
+        }
       })
         .then(() => {
           setTasks(tasks.filter((_, i) => i !== idx));
@@ -59,9 +72,13 @@ function Tasks() {
   const handleEditSave = (idx) => {
     const updated = [...tasks];
     updated[idx].text = editValue;
+    const token = localStorage.getItem('token');
     fetch(`https://task-manager-backend-407e.onrender.com/api/tasks/${tasks[idx].id}`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        'Authorization': token
+      },
       body: JSON.stringify(updated[idx]),
     })
       .then(res => res.json())
@@ -75,9 +92,13 @@ function Tasks() {
   const handleToggleComplete = (idx) => {
     const updated = [...tasks];
     updated[idx].completed = !updated[idx].completed;
+    const token = localStorage.getItem('token');
     fetch(`https://task-manager-backend-407e.onrender.com/api/tasks/${tasks[idx].id}`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        'Authorization': token
+      },
       body: JSON.stringify(updated[idx]),
     })
       .then(res => res.json())
