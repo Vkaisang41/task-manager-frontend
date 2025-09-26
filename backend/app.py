@@ -1,66 +1,65 @@
+import os
+import time
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from werkzeug.security import generate_password_hash, check_password_hash
-import os
-import time
-from models import db, User, Task, Project, Note
-from schemas import (
-    user_schema, task_schema, project_schema, note_schema
-)
+
+from models import db, User, Task, Project, Note, TaskProject
+from schemas import user_schema, task_schema, project_schema, note_schema
 
 # ---------------- APP CONFIG ----------------
-app = Flask(__name__, static_folder='../build', static_url_path='/')
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev_secret_key')
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///tasks.db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app = Flask(__name__, static_folder="../build", static_url_path="/")
+app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev_secret_key")
+app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL", "sqlite:///tasks.db")
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+
 CORS(app)
 db.init_app(app)
 
-# Create tables
 with app.app_context():
     db.create_all()
 
 
 # ---------------- AUTH ----------------
-@app.route('/api/register', methods=['POST'])
+@app.route("/api/register", methods=["POST"])
 def register():
-    data = request.get_json()
+    data = request.get_json() or {}
     errors = user_schema.validate(data)
     if errors:
-        return jsonify(errors), 400
+        return jsonify({"errors": errors}), 400
 
-    if User.query.filter_by(username=data['username']).first():
+    if User.query.filter_by(username=data["username"]).first():
         return jsonify({"msg": "Username already exists"}), 409
 
-    password_hash = generate_password_hash(data['password'])
-    new_user = User(username=data['username'], password=password_hash)
+    password_hash = generate_password_hash(data["password"])
+    new_user = User(username=data["username"], password=password_hash)
     db.session.add(new_user)
     db.session.commit()
     return jsonify({"msg": "User registered"}), 201
 
 
-@app.route('/api/login', methods=['POST'])
+@app.route("/api/login", methods=["POST"])
 def login():
-    data = request.get_json()
-    if not data:
+    data = request.get_json() or {}
+    if not data.get("username") or not data.get("password"):
         return jsonify({"msg": "Invalid request"}), 400
-    user = User.query.filter_by(username=data['username']).first()
-    if user and check_password_hash(user.password, data['password']):
+    user = User.query.filter_by(username=data["username"]).first()
+    if user and check_password_hash(user.password, data["password"]):
         token = f"token_{user.id}_{int(time.time())}"
-        return jsonify({"token": token, "user": user.to_dict()})
-    return jsonify({"msg": "Wrong password"}), 401
+        return jsonify({"token": token, "user": user.to_dict()}), 200
+    return jsonify({"msg": "Wrong credentials"}), 401
 
 
 def get_current_user():
-    token = request.headers.get('Authorization')
+    token = request.headers.get("Authorization")
     if not token:
         return None
     try:
-        parts = token.split('_')
-        if len(parts) >= 2 and parts[0] == 'token':
+        parts = token.split("_")
+        if len(parts) >= 2 and parts[0] == "token":
             user_id = int(parts[1])
             return User.query.get(user_id)
-    except:
+    except Exception:
         pass
     return None
 
@@ -72,7 +71,7 @@ def get_tasks():
     if not user:
         return jsonify({"msg": "Unauthorized"}), 401
     tasks = Task.query.filter_by(user_id=user.id).all()
-    return jsonify([task.to_dict() for task in tasks])
+    return jsonify([t.to_dict() for t in tasks]), 200
 
 
 @app.route("/api/tasks", methods=["POST"])
@@ -80,10 +79,10 @@ def add_task():
     user = get_current_user()
     if not user:
         return jsonify({"msg": "Unauthorized"}), 401
-    data = request.get_json()
+    data = request.get_json() or {}
     errors = task_schema.validate(data)
     if errors:
-        return jsonify(errors), 400
+        return jsonify({"errors": errors}), 400
     new_task = Task(
         text=data["text"],
         completed=data.get("completed", False),
@@ -101,17 +100,17 @@ def update_task(task_id):
     user = get_current_user()
     if not user:
         return jsonify({"msg": "Unauthorized"}), 401
-    data = request.get_json()
+    task = Task.query.filter_by(id=task_id, user_id=user.id).first_or_404()
+    data = request.get_json() or {}
     errors = task_schema.validate(data)
     if errors:
-        return jsonify(errors), 400
-    task = Task.query.filter_by(id=task_id, user_id=user.id).first_or_404()
+        return jsonify({"errors": errors}), 400
     task.text = data["text"]
-    task.completed = data["completed"]
-    task.priority = data.get("priority")
-    task.due_date = data.get("dueDate")
+    task.completed = data.get("completed", task.completed)
+    task.priority = data.get("priority", task.priority)
+    task.due_date = data.get("dueDate", task.due_date)
     db.session.commit()
-    return jsonify(task.to_dict())
+    return jsonify(task.to_dict()), 200
 
 
 @app.route("/api/tasks/<int:task_id>", methods=["DELETE"])
@@ -132,7 +131,7 @@ def get_projects():
     if not user:
         return jsonify({"msg": "Unauthorized"}), 401
     projects = Project.query.filter_by(user_id=user.id).all()
-    return jsonify([project.to_dict() for project in projects])
+    return jsonify([p.to_dict() for p in projects]), 200
 
 
 @app.route("/api/projects", methods=["POST"])
@@ -140,10 +139,10 @@ def add_project():
     user = get_current_user()
     if not user:
         return jsonify({"msg": "Unauthorized"}), 401
-    data = request.get_json()
+    data = request.get_json() or {}
     errors = project_schema.validate(data)
     if errors:
-        return jsonify(errors), 400
+        return jsonify({"errors": errors}), 400
     new_project = Project(
         name=data["name"],
         category=data.get("category"),
@@ -160,16 +159,16 @@ def update_project(project_id):
     user = get_current_user()
     if not user:
         return jsonify({"msg": "Unauthorized"}), 401
-    data = request.get_json()
+    project = Project.query.filter_by(id=project_id, user_id=user.id).first_or_404()
+    data = request.get_json() or {}
     errors = project_schema.validate(data)
     if errors:
-        return jsonify(errors), 400
-    project = Project.query.filter_by(id=project_id, user_id=user.id).first_or_404()
+        return jsonify({"errors": errors}), 400
     project.name = data["name"]
     project.category = data.get("category")
-    project.pinned = data.get("pinned", False)
+    project.pinned = data.get("pinned", project.pinned)
     db.session.commit()
-    return jsonify(project.to_dict())
+    return jsonify(project.to_dict()), 200
 
 
 @app.route("/api/projects/<int:project_id>", methods=["DELETE"])
@@ -190,7 +189,7 @@ def get_notes():
     if not user:
         return jsonify({"msg": "Unauthorized"}), 401
     notes = Note.query.filter_by(user_id=user.id).all()
-    return jsonify([note.to_dict() for note in notes])
+    return jsonify([n.to_dict() for n in notes]), 200
 
 
 @app.route("/api/notes", methods=["POST"])
@@ -198,10 +197,10 @@ def add_note():
     user = get_current_user()
     if not user:
         return jsonify({"msg": "Unauthorized"}), 401
-    data = request.get_json()
+    data = request.get_json() or {}
     errors = note_schema.validate(data)
     if errors:
-        return jsonify(errors), 400
+        return jsonify({"errors": errors}), 400
     new_note = Note(
         text=data["text"],
         pinned=data.get("pinned", False),
@@ -217,15 +216,15 @@ def update_note(note_id):
     user = get_current_user()
     if not user:
         return jsonify({"msg": "Unauthorized"}), 401
-    data = request.get_json()
+    note = Note.query.filter_by(id=note_id, user_id=user.id).first_or_404()
+    data = request.get_json() or {}
     errors = note_schema.validate(data)
     if errors:
-        return jsonify(errors), 400
-    note = Note.query.filter_by(id=note_id, user_id=user.id).first_or_404()
+        return jsonify({"errors": errors}), 400
     note.text = data["text"]
-    note.pinned = data.get("pinned", False)
+    note.pinned = data.get("pinned", note.pinned)
     db.session.commit()
-    return jsonify(note.to_dict())
+    return jsonify(note.to_dict()), 200
 
 
 @app.route("/api/notes/<int:note_id>", methods=["DELETE"])
@@ -239,15 +238,59 @@ def delete_note(note_id):
     return "", 204
 
 
-# ---------------- FRONTEND ----------------
-@app.route('/')
+# ---------------- TASK-PROJECT ASSOCIATIONS ----------------
+@app.route("/api/task-projects", methods=["POST"])
+def add_task_project():
+    user = get_current_user()
+    if not user:
+        return jsonify({"msg":"Unauthorized"}), 401
+    data = request.get_json() or {}
+    task = Task.query.filter_by(id=data.get("task_id"), user_id=user.id).first()
+    project = Project.query.filter_by(id=data.get("project_id"), user_id=user.id).first()
+    if not task or not project:
+        return jsonify({"msg":"Task or Project not found"}), 404
+    tp = TaskProject(task_id=task.id, project_id=project.id, context=data.get("context"), order=data.get("order"))
+    db.session.add(tp)
+    db.session.commit()
+    return jsonify(tp.to_dict()), 201
+
+@app.route("/api/task-projects/<int:tp_id>", methods=["PATCH"])
+def update_task_project(tp_id):
+    user = get_current_user()
+    if not user:
+        return jsonify({"msg":"Unauthorized"}), 401
+    tp = TaskProject.query.get_or_404(tp_id)
+    if tp.task.user_id != user.id or tp.project.user_id != user.id:
+        return jsonify({"msg":"Unauthorized"}), 401
+    data = request.get_json() or {}
+    if "context" in data:
+        tp.context = data["context"]
+    if "order" in data:
+        tp.order = data["order"]
+    db.session.commit()
+    return jsonify(tp.to_dict()), 200
+
+@app.route("/api/task-projects/<int:tp_id>", methods=["DELETE"])
+def delete_task_project(tp_id):
+    user = get_current_user()
+    if not user:
+        return jsonify({"msg":"Unauthorized"}), 401
+    tp = TaskProject.query.get_or_404(tp_id)
+    if tp.task.user_id != user.id or tp.project.user_id != user.id:
+        return jsonify({"msg":"Unauthorized"}), 401
+    db.session.delete(tp)
+    db.session.commit()
+    return "", 204
+
+
+# ---------------- FRONTEND STATIC ----------------
+@app.route("/")
 def index():
-    return app.send_static_file('index.html')
+    return app.send_static_file("index.html")
 
-
-@app.route('/<path:path>')
+@app.route("/<path:path>")
 def catch_all(path):
-    return app.send_static_file('index.html')
+    return app.send_static_file("index.html")
 
 
 # ---------------- LOCAL DEV ----------------
