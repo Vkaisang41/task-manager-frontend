@@ -5,7 +5,12 @@ function Notes() {
   const [input, setInput] = useState("");
 
   useEffect(() => {
-    fetch("https://task-manager-backend-407e.onrender.com/api/notes")
+    const token = localStorage.getItem('token');
+    fetch("https://task-manager-backend-407e.onrender.com/api/notes", {
+      headers: {
+        'Authorization': token
+      }
+    })
       .then((res) => res.json())
       .then((data) => setNotes(Array.isArray(data) ? data : []));
   }, []);
@@ -13,9 +18,13 @@ function Notes() {
   const handleAdd = (e) => {
     e.preventDefault();
     if (input.trim()) {
+      const token = localStorage.getItem('token');
       fetch("https://task-manager-backend-407e.onrender.com/api/notes", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          'Authorization': token
+        },
         body: JSON.stringify({
           text: input.trim(),
           pinned: false,
@@ -30,8 +39,12 @@ function Notes() {
   };
 
   const handleDelete = (id) => {
+    const token = localStorage.getItem('token');
     fetch(`https://task-manager-backend-407e.onrender.com/api/notes/${id}`, {
       method: "DELETE",
+      headers: {
+        'Authorization': token
+      }
     }).then(() => {
       setNotes(notes.filter((note) => note.id !== id));
     });
@@ -39,9 +52,13 @@ function Notes() {
 
   const handlePin = (idx) => {
     const note = notes[idx];
+    const token = localStorage.getItem('token');
     fetch(`https://task-manager-backend-407e.onrender.com/api/notes/${note.id}`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        'Authorization': token
+      },
       body: JSON.stringify({
         ...note,
         pinned: !note.pinned,

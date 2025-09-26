@@ -10,7 +10,12 @@ function Projects() {
   const [filter, setFilter] = useState("all");
 
   useEffect(() => {
-    fetch('https://task-manager-backend-407e.onrender.com/api/projects')
+    const token = localStorage.getItem('token');
+    fetch('https://task-manager-backend-407e.onrender.com/api/projects', {
+      headers: {
+        'Authorization': token
+      }
+    })
       .then((res) => res.json())
       .then((data) => setProjects(Array.isArray(data) ? data : []));
   }, []);
@@ -18,9 +23,13 @@ function Projects() {
   const handleAdd = (e) => {
     e.preventDefault();
     if (input.trim()) {
+      const token = localStorage.getItem('token');
       fetch('https://task-manager-backend-407e.onrender.com/api/projects', {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          'Authorization': token
+        },
         body: JSON.stringify({
           name: input.trim(),
           category,
@@ -37,8 +46,12 @@ function Projects() {
   };
 
   const handleDelete = (id) => {
+    const token = localStorage.getItem('token');
     fetch(`https://task-manager-backend-407e.onrender.com/api/projects/${id}`, {
       method: "DELETE",
+      headers: {
+        'Authorization': token
+      }
     }).then(() => {
       setProjects(projects.filter((project) => project.id !== id));
     });
@@ -52,9 +65,13 @@ function Projects() {
 
   const handleEditSave = (idx) => {
     const project = projects[idx];
+    const token = localStorage.getItem('token');
     fetch(`https://task-manager-backend-407e.onrender.com/api/projects/${project.id}`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        'Authorization': token
+      },
       body: JSON.stringify({
         name: editValue,
         category: editCategory,
@@ -73,9 +90,13 @@ function Projects() {
 
   const handlePin = (idx) => {
     const project = projects[idx];
+    const token = localStorage.getItem('token');
     fetch(`https://task-manager-backend-407e.onrender.com/api/projects/${project.id}`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        'Authorization': token
+      },
       body: JSON.stringify({
         ...project,
         pinned: !project.pinned,
