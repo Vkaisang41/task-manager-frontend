@@ -19,7 +19,11 @@ function Tasks() {
       }
     })
       .then(res => res.json())
-      .then(data => setTasks(data));
+      .then(data => setTasks(data.map(task => ({
+        ...task,
+        dueDate: task.due_date,
+        completed: Boolean(task.completed)
+      }))));
   }, []);
 
   const handleAdd = (e) => {
@@ -36,7 +40,7 @@ function Tasks() {
           text: input.trim(),
           completed: false,
           priority,
-          dueDate,
+          due_date: dueDate,
         }),
       })
         .then(res => res.json())
@@ -79,7 +83,10 @@ function Tasks() {
         "Content-Type": "application/json",
         'Authorization': token
       },
-      body: JSON.stringify(updated[idx]),
+      body: JSON.stringify({
+        ...updated[idx],
+        due_date: updated[idx].dueDate
+      }),
     })
       .then(res => res.json())
       .then(() => {
@@ -99,7 +106,10 @@ function Tasks() {
         "Content-Type": "application/json",
         'Authorization': token
       },
-      body: JSON.stringify(updated[idx]),
+      body: JSON.stringify({
+        ...updated[idx],
+        due_date: updated[idx].dueDate
+      }),
     })
       .then(res => res.json())
       .then(() => {
