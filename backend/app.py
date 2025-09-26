@@ -1,35 +1,44 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from werkzeug.security import generate_password_hash, check_password_hash
-import sqlite3
-import datetime
-import time
 import os
+import time
+from models import db, User, Task, Project, Note
+from schemas import (
+    user_schema, users_schema,
+    task_schema, tasks_schema,
+    project_schema, projects_schema,
+    note_schema, notes_schema
+)
 
+# ---------------- APP CONFIG ----------------
 app = Flask(__name__, static_folder='../build', static_url_path='/')
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev_secret_key')
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///tasks.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 CORS(app)
+db.init_app(app)
 
-def get_db():
-    conn = sqlite3.connect("tasks.db")
-    conn.row_factory = sqlite3.Row
-    return conn
+# Create all tables automatically
+with app.app_context():
+    db.create_all()
 
 
 # ---------------- AUTH ----------------
 @app.route('/api/register', methods=['POST'])
 def register():
     data = request.get_json()
-    conn = get_db()
-    # Check if user exists
-    user = conn.execute("SELECT * FROM users WHERE username=?", (data['username'],)).fetchone()
-    if user:
-        conn.close()
+    errors = user_schema.validate(data)
+    if errors:
+        return jsonify(errors), 400
+
+    if User.query.filter_by(username=data['username']).first():
         return jsonify({"msg": "Username already exists"}), 409
+
     password_hash = generate_password_hash(data['password'])
-    conn.execute("INSERT INTO users (username, password) VALUES (?, ?)", (data['username'], password_hash))
-    conn.commit()
-    conn.close()
+    new_user = User(username=data['username'], password=password_hash)
+    db.session.add(new_user)
+    db.session.commit()
     return jsonify({"msg": "User registered"}), 201
 
 
@@ -38,154 +47,198 @@ def login():
     data = request.get_json()
     if not data:
         return jsonify({"msg": "Invalid request"}), 400
-    conn = get_db()
-    user = conn.execute("SELECT * FROM users WHERE username=?", (data['username'],)).fetchone()
-    conn.close()
-    if user and check_password_hash(user['password'], data['password']):
-        token = f"token_{user['id']}_{int(time.time())}"
-        return jsonify({"token": token, "user": {"id": user['id'], "username": user['username']}})
+    user = User.query.filter_by(username=data['username']).first()
+    if user and check_password_hash(user.password, data['password']):
+        token = f"token_{user.id}_{int(time.time())}"
+        return jsonify({"token": token, "user": user_schema.dump(user)})
     return jsonify({"msg": "Wrong password"}), 401
 
 
+def get_current_user():
+    token = request.headers.get('Authorization')
+    if not token:
+        return None
+    try:
+        parts = token.split('_')
+        if len(parts) >= 2 and parts[0] == 'token':
+            user_id = int(parts[1])
+            return User.query.get(user_id)
+    except:
+        pass
+    return None
 
 
 # ---------------- TASKS ----------------
 @app.route("/api/tasks", methods=["GET"])
 def get_tasks():
-    conn = get_db()
-    tasks = conn.execute("SELECT * FROM tasks").fetchall()
-    conn.close()
-    return jsonify([dict(row) for row in tasks])
+    user = get_current_user()
+    if not user:
+        return jsonify({"msg": "Unauthorized"}), 401
+    tasks = Task.query.filter_by(user_id=user.id).all()
+    return jsonify(tasks_schema.dump(tasks))
 
 
 @app.route("/api/tasks", methods=["POST"])
 def add_task():
+    user = get_current_user()
+    if not user:
+        return jsonify({"msg": "Unauthorized"}), 401
     data = request.get_json()
-    conn = get_db()
-    cur = conn.cursor()
-    cur.execute(
-        "INSERT INTO tasks (text, completed, priority, dueDate) VALUES (?, ?, ?, ?)",
-        (data["text"], int(data["completed"]), data["priority"], data["dueDate"])
+    errors = task_schema.validate(data)
+    if errors:
+        return jsonify(errors), 400
+    new_task = Task(
+        text=data["text"],
+        completed=data.get("completed", False),
+        priority=data.get("priority"),
+        due_date=data.get("dueDate"),
+        user_id=user.id
     )
-    conn.commit()
-    new_id = cur.lastrowid
-    conn.close()
-    return jsonify({"id": new_id, **data}), 201
+    db.session.add(new_task)
+    db.session.commit()
+    return jsonify(task_schema.dump(new_task)), 201
 
 
 @app.route("/api/tasks/<int:task_id>", methods=["PUT"])
 def update_task(task_id):
+    user = get_current_user()
+    if not user:
+        return jsonify({"msg": "Unauthorized"}), 401
     data = request.get_json()
-    conn = get_db()
-    conn.execute(
-        "UPDATE tasks SET text=?, completed=?, priority=?, dueDate=? WHERE id=?",
-        (data["text"], int(data["completed"]), data["priority"], data["dueDate"], task_id)
-    )
-    conn.commit()
-    conn.close()
-    return jsonify({"id": task_id, **data})
+    errors = task_schema.validate(data)
+    if errors:
+        return jsonify(errors), 400
+    task = Task.query.filter_by(id=task_id, user_id=user.id).first_or_404()
+    task.text = data["text"]
+    task.completed = data["completed"]
+    task.priority = data.get("priority")
+    task.due_date = data.get("dueDate")
+    db.session.commit()
+    return jsonify(task_schema.dump(task))
 
 
 @app.route("/api/tasks/<int:task_id>", methods=["DELETE"])
 def delete_task(task_id):
-    conn = get_db()
-    conn.execute("DELETE FROM tasks WHERE id=?", (task_id,))
-    conn.commit()
-    conn.close()
+    user = get_current_user()
+    if not user:
+        return jsonify({"msg": "Unauthorized"}), 401
+    task = Task.query.filter_by(id=task_id, user_id=user.id).first_or_404()
+    db.session.delete(task)
+    db.session.commit()
     return "", 204
 
 
 # ---------------- PROJECTS ----------------
 @app.route("/api/projects", methods=["GET"])
 def get_projects():
-    conn = get_db()
-    projects = conn.execute("SELECT * FROM projects").fetchall()
-    conn.close()
-    return jsonify([dict(row) for row in projects])
+    user = get_current_user()
+    if not user:
+        return jsonify({"msg": "Unauthorized"}), 401
+    projects = Project.query.filter_by(user_id=user.id).all()
+    return jsonify(projects_schema.dump(projects))
 
 
 @app.route("/api/projects", methods=["POST"])
 def add_project():
+    user = get_current_user()
+    if not user:
+        return jsonify({"msg": "Unauthorized"}), 401
     data = request.get_json()
-    conn = get_db()
-    cur = conn.cursor()
-    cur.execute(
-        "INSERT INTO projects (name, category, pinned) VALUES (?, ?, ?)",
-        (data["name"], data["category"], int(data.get("pinned", False)))
+    errors = project_schema.validate(data)
+    if errors:
+        return jsonify(errors), 400
+    new_project = Project(
+        name=data["name"],
+        category=data.get("category"),
+        pinned=data.get("pinned", False),
+        user_id=user.id
     )
-    conn.commit()
-    new_id = cur.lastrowid
-    conn.close()
-    return jsonify({"id": new_id, **data}), 201
+    db.session.add(new_project)
+    db.session.commit()
+    return jsonify(project_schema.dump(new_project)), 201
 
 
 @app.route("/api/projects/<int:project_id>", methods=["PUT"])
 def update_project(project_id):
+    user = get_current_user()
+    if not user:
+        return jsonify({"msg": "Unauthorized"}), 401
     data = request.get_json()
-    conn = get_db()
-    conn.execute(
-        "UPDATE projects SET name=?, category=?, pinned=? WHERE id=?",
-        (data["name"], data["category"], int(data.get("pinned", False)), project_id)
-    )
-    conn.commit()
-    updated = conn.execute("SELECT * FROM projects WHERE id=?", (project_id,)).fetchone()
-    conn.close()
-    return jsonify(dict(updated))
+    errors = project_schema.validate(data)
+    if errors:
+        return jsonify(errors), 400
+    project = Project.query.filter_by(id=project_id, user_id=user.id).first_or_404()
+    project.name = data["name"]
+    project.category = data.get("category")
+    project.pinned = data.get("pinned", False)
+    db.session.commit()
+    return jsonify(project_schema.dump(project))
 
 
 @app.route("/api/projects/<int:project_id>", methods=["DELETE"])
 def delete_project(project_id):
-    conn = get_db()
-    conn.execute("DELETE FROM projects WHERE id=?", (project_id,))
-    conn.commit()
-    conn.close()
+    user = get_current_user()
+    if not user:
+        return jsonify({"msg": "Unauthorized"}), 401
+    project = Project.query.filter_by(id=project_id, user_id=user.id).first_or_404()
+    db.session.delete(project)
+    db.session.commit()
     return "", 204
 
 
 # ---------------- NOTES ----------------
 @app.route("/api/notes", methods=["GET"])
 def get_notes():
-    conn = get_db()
-    notes = conn.execute("SELECT * FROM notes").fetchall()
-    conn.close()
-    return jsonify([dict(row) for row in notes])
+    user = get_current_user()
+    if not user:
+        return jsonify({"msg": "Unauthorized"}), 401
+    notes = Note.query.filter_by(user_id=user.id).all()
+    return jsonify(notes_schema.dump(notes))
 
 
 @app.route("/api/notes", methods=["POST"])
 def add_note():
+    user = get_current_user()
+    if not user:
+        return jsonify({"msg": "Unauthorized"}), 401
     data = request.get_json()
-    conn = get_db()
-    cur = conn.cursor()
-    cur.execute(
-        "INSERT INTO notes (text, pinned) VALUES (?, ?)",
-        (data["text"], int(data.get("pinned", False)))
+    errors = note_schema.validate(data)
+    if errors:
+        return jsonify(errors), 400
+    new_note = Note(
+        text=data["text"],
+        pinned=data.get("pinned", False),
+        user_id=user.id
     )
-    conn.commit()
-    new_id = cur.lastrowid
-    conn.close()
-    return jsonify({"id": new_id, **data}), 201
+    db.session.add(new_note)
+    db.session.commit()
+    return jsonify(note_schema.dump(new_note)), 201
 
 
 @app.route("/api/notes/<int:note_id>", methods=["PUT"])
 def update_note(note_id):
+    user = get_current_user()
+    if not user:
+        return jsonify({"msg": "Unauthorized"}), 401
     data = request.get_json()
-    conn = get_db()
-    conn.execute(
-        "UPDATE notes SET text=?, pinned=? WHERE id=?",
-        (data["text"], int(data.get("pinned", False)), note_id)
-    )
-    conn.commit()
-    updated = conn.execute("SELECT * FROM notes WHERE id=?", (note_id,)).fetchone()
-    conn.close()
-    return jsonify(dict(updated))
+    errors = note_schema.validate(data)
+    if errors:
+        return jsonify(errors), 400
+    note = Note.query.filter_by(id=note_id, user_id=user.id).first_or_404()
+    note.text = data["text"]
+    note.pinned = data.get("pinned", False)
+    db.session.commit()
+    return jsonify(note_schema.dump(note))
 
 
 @app.route("/api/notes/<int:note_id>", methods=["DELETE"])
 def delete_note(note_id):
-    conn = get_db()
-    conn.execute("DELETE FROM notes WHERE id=?", (note_id,))
-    conn.commit()
-    conn.close()
+    user = get_current_user()
+    if not user:
+        return jsonify({"msg": "Unauthorized"}), 401
+    note = Note.query.filter_by(id=note_id, user_id=user.id).first_or_404()
+    db.session.delete(note)
+    db.session.commit()
     return "", 204
 
 
@@ -202,43 +255,4 @@ def catch_all(path):
 
 # ---------------- LOCAL DEV ----------------
 if __name__ == "__main__":
-    conn = sqlite3.connect("tasks.db")
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS tasks (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            text TEXT NOT NULL,
-            completed INTEGER NOT NULL,
-            priority TEXT,
-            dueDate TEXT
-        )
-    """)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS projects (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            category TEXT,
-            pinned INTEGER DEFAULT 0
-        )
-    """)
-    # Migration: add pinned column if missing
-    try:
-        conn.execute("ALTER TABLE projects ADD COLUMN pinned INTEGER DEFAULT 0;")
-    except sqlite3.OperationalError:
-        pass  # Column already exists
-
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS notes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            text TEXT NOT NULL,
-            pinned INTEGER NOT NULL
-        )
-    """)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT NOT NULL UNIQUE,
-            password TEXT NOT NULL
-        )
-    """)
-    conn.close()
-    app.run(port=8000)
+    app.run(port=8000, debug=True)
