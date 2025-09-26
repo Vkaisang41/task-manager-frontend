@@ -64,6 +64,10 @@ function Projects() {
   };
 
   const handleEditSave = (idx) => {
+    if (!editValue.trim()) {
+      alert("Project name cannot be empty");
+      return;
+    }
     const project = projects[idx];
     const token = localStorage.getItem('token');
     fetch(`https://task-manager-backend-407e.onrender.com/api/projects/${project.id}`, {
@@ -73,7 +77,7 @@ function Projects() {
         'Authorization': token
       },
       body: JSON.stringify({
-        name: editValue,
+        name: editValue.trim(),
         category: editCategory,
         pinned: project.pinned || false,
       }),

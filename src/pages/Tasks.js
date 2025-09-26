@@ -74,8 +74,12 @@ function Tasks() {
   };
 
   const handleEditSave = (idx) => {
+    if (!editValue.trim()) {
+      alert("Task text cannot be empty");
+      return;
+    }
     const updated = [...tasks];
-    updated[idx].text = editValue;
+    updated[idx].text = editValue.trim();
     const token = localStorage.getItem('token');
     fetch(`https://task-manager-backend-407e.onrender.com/api/tasks/${tasks[idx].id}`, {
       method: "PUT",
