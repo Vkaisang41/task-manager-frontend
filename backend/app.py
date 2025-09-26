@@ -5,10 +5,7 @@ import os
 import time
 from models import db, User, Task, Project, Note
 from schemas import (
-    user_schema, users_schema,
-    task_schema, tasks_schema,
-    project_schema, projects_schema,
-    note_schema, notes_schema
+    user_schema, task_schema, project_schema, note_schema
 )
 
 # ---------------- APP CONFIG ----------------
@@ -19,7 +16,7 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 CORS(app)
 db.init_app(app)
 
-# Create all tables automatically
+# Create tables
 with app.app_context():
     db.create_all()
 
@@ -50,7 +47,7 @@ def login():
     user = User.query.filter_by(username=data['username']).first()
     if user and check_password_hash(user.password, data['password']):
         token = f"token_{user.id}_{int(time.time())}"
-        return jsonify({"token": token, "user": user_schema.dump(user)})
+        return jsonify({"token": token, "user": user.to_dict()})
     return jsonify({"msg": "Wrong password"}), 401
 
 
@@ -246,6 +243,7 @@ def delete_note(note_id):
 @app.route('/')
 def index():
     return app.send_static_file('index.html')
+
 
 @app.route('/<path:path>')
 def catch_all(path):
