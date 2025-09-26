@@ -245,7 +245,7 @@ def delete_note(note_id):
 # ---------------- FRONTEND ----------------
 @app.route('/')
 def index():
-    return jsonify({"message": "Task Manager API"})
+    return app.send_static_file('index.html')
 
 @app.route('/<path:path>')
 def catch_all(path):
