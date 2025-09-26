@@ -4,7 +4,6 @@ from werkzeug.security import generate_password_hash, check_password_hash
 import os
 import time
 from models import db, User, Task, Project, Note, Tag
-from schemas import tasks_schema, task_schema, projects_schema, project_schema, notes_schema, note_schema
 
 app = Flask(__name__, static_folder='../build', static_url_path='/')
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev_secret_key')
@@ -52,7 +51,7 @@ def login():
 @app.route("/api/tasks", methods=["GET"])
 def get_tasks():
     tasks = Task.query.all()
-    return tasks_schema.jsonify(tasks)
+    return jsonify([task.to_dict() for task in tasks])
 
 
 @app.route("/api/tasks", methods=["POST"])
@@ -66,7 +65,7 @@ def add_task():
     )
     db.session.add(new_task)
     db.session.commit()
-    return task_schema.jsonify(new_task), 201
+    return jsonify(new_task.to_dict()), 201
 
 
 @app.route("/api/tasks/<int:task_id>", methods=["PUT"])
@@ -78,7 +77,7 @@ def update_task(task_id):
     task.priority = data.get("priority")
     task.due_date = data.get("dueDate")
     db.session.commit()
-    return task_schema.jsonify(task)
+    return jsonify(task.to_dict())
 
 
 @app.route("/api/tasks/<int:task_id>", methods=["DELETE"])
@@ -93,7 +92,7 @@ def delete_task(task_id):
 @app.route("/api/projects", methods=["GET"])
 def get_projects():
     projects = Project.query.all()
-    return projects_schema.jsonify(projects)
+    return jsonify([project.to_dict() for project in projects])
 
 
 @app.route("/api/projects", methods=["POST"])
@@ -106,7 +105,7 @@ def add_project():
     )
     db.session.add(new_project)
     db.session.commit()
-    return project_schema.jsonify(new_project), 201
+    return jsonify(new_project.to_dict()), 201
 
 
 @app.route("/api/projects/<int:project_id>", methods=["PUT"])
@@ -117,7 +116,7 @@ def update_project(project_id):
     project.category = data.get("category")
     project.pinned = bool(data.get("pinned", False))
     db.session.commit()
-    return project_schema.jsonify(project)
+    return jsonify(project.to_dict())
 
 
 @app.route("/api/projects/<int:project_id>", methods=["DELETE"])
@@ -132,7 +131,7 @@ def delete_project(project_id):
 @app.route("/api/notes", methods=["GET"])
 def get_notes():
     notes = Note.query.all()
-    return notes_schema.jsonify(notes)
+    return jsonify([note.to_dict() for note in notes])
 
 
 @app.route("/api/notes", methods=["POST"])
@@ -144,7 +143,7 @@ def add_note():
     )
     db.session.add(new_note)
     db.session.commit()
-    return note_schema.jsonify(new_note), 201
+    return jsonify(new_note.to_dict()), 201
 
 
 @app.route("/api/notes/<int:note_id>", methods=["PUT"])
@@ -154,7 +153,7 @@ def update_note(note_id):
     note.text = data["text"]
     note.pinned = bool(data.get("pinned", False))
     db.session.commit()
-    return note_schema.jsonify(note)
+    return jsonify(note.to_dict())
 
 
 @app.route("/api/notes/<int:note_id>", methods=["DELETE"])
