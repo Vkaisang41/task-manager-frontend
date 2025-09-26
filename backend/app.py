@@ -75,7 +75,7 @@ def get_tasks():
     if not user:
         return jsonify({"msg": "Unauthorized"}), 401
     tasks = Task.query.filter_by(user_id=user.id).all()
-    return jsonify(tasks_schema.dump(tasks))
+    return jsonify([task.to_dict() for task in tasks])
 
 
 @app.route("/api/tasks", methods=["POST"])
@@ -96,7 +96,7 @@ def add_task():
     )
     db.session.add(new_task)
     db.session.commit()
-    return jsonify(task_schema.dump(new_task)), 201
+    return jsonify(new_task.to_dict()), 201
 
 
 @app.route("/api/tasks/<int:task_id>", methods=["PUT"])
@@ -114,7 +114,7 @@ def update_task(task_id):
     task.priority = data.get("priority")
     task.due_date = data.get("dueDate")
     db.session.commit()
-    return jsonify(task_schema.dump(task))
+    return jsonify(task.to_dict())
 
 
 @app.route("/api/tasks/<int:task_id>", methods=["DELETE"])
@@ -135,7 +135,7 @@ def get_projects():
     if not user:
         return jsonify({"msg": "Unauthorized"}), 401
     projects = Project.query.filter_by(user_id=user.id).all()
-    return jsonify(projects_schema.dump(projects))
+    return jsonify([project.to_dict() for project in projects])
 
 
 @app.route("/api/projects", methods=["POST"])
@@ -155,7 +155,7 @@ def add_project():
     )
     db.session.add(new_project)
     db.session.commit()
-    return jsonify(project_schema.dump(new_project)), 201
+    return jsonify(new_project.to_dict()), 201
 
 
 @app.route("/api/projects/<int:project_id>", methods=["PUT"])
@@ -172,7 +172,7 @@ def update_project(project_id):
     project.category = data.get("category")
     project.pinned = data.get("pinned", False)
     db.session.commit()
-    return jsonify(project_schema.dump(project))
+    return jsonify(project.to_dict())
 
 
 @app.route("/api/projects/<int:project_id>", methods=["DELETE"])
@@ -193,7 +193,7 @@ def get_notes():
     if not user:
         return jsonify({"msg": "Unauthorized"}), 401
     notes = Note.query.filter_by(user_id=user.id).all()
-    return jsonify(notes_schema.dump(notes))
+    return jsonify([note.to_dict() for note in notes])
 
 
 @app.route("/api/notes", methods=["POST"])
@@ -212,7 +212,7 @@ def add_note():
     )
     db.session.add(new_note)
     db.session.commit()
-    return jsonify(note_schema.dump(new_note)), 201
+    return jsonify(new_note.to_dict()), 201
 
 
 @app.route("/api/notes/<int:note_id>", methods=["PUT"])
@@ -228,7 +228,7 @@ def update_note(note_id):
     note.text = data["text"]
     note.pinned = data.get("pinned", False)
     db.session.commit()
-    return jsonify(note_schema.dump(note))
+    return jsonify(note.to_dict())
 
 
 @app.route("/api/notes/<int:note_id>", methods=["DELETE"])
