@@ -13,7 +13,7 @@ function Login({ onLogin }) {
     setError("");
     if (username && password) {
       try {
-        const response = await fetch('/api/login', {
+        const response = await fetch('https://task-manager-backend-407e.onrender.com/api/login', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

@@ -5,7 +5,7 @@ function Notes() {
   const [input, setInput] = useState("");
 
   useEffect(() => {
-    fetch("/api/notes")
+    fetch("https://task-manager-backend-407e.onrender.com/api/notes")
       .then((res) => res.json())
       .then((data) => setNotes(Array.isArray(data) ? data : []));
   }, []);
@@ -13,7 +13,7 @@ function Notes() {
   const handleAdd = (e) => {
     e.preventDefault();
     if (input.trim()) {
-      fetch("/api/notes", {
+      fetch("https://task-manager-backend-407e.onrender.com/api/notes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -30,7 +30,7 @@ function Notes() {
   };
 
   const handleDelete = (id) => {
-    fetch(`/api/notes/${id}`, {
+    fetch(`https://task-manager-backend-407e.onrender.com/api/notes/${id}`, {
       method: "DELETE",
     }).then(() => {
       setNotes(notes.filter((note) => note.id !== id));
@@ -39,7 +39,7 @@ function Notes() {
 
   const handlePin = (idx) => {
     const note = notes[idx];
-    fetch(`/api/notes/${note.id}`, {
+    fetch(`https://task-manager-backend-407e.onrender.com/api/notes/${note.id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

@@ -12,7 +12,7 @@ function Tasks() {
 
   // Fetch tasks from backend on mount
   useEffect(() => {
-    fetch("/api/tasks")
+    fetch("https://task-manager-backend-407e.onrender.com/api/tasks")
       .then(res => res.json())
       .then(data => setTasks(data));
   }, []);
@@ -20,7 +20,7 @@ function Tasks() {
   const handleAdd = (e) => {
     e.preventDefault();
     if (input.trim()) {
-      fetch("/api/tasks", {
+      fetch("https://task-manager-backend-407e.onrender.com/api/tasks", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -42,7 +42,7 @@ function Tasks() {
 
   const handleDelete = (idx) => {
     if (window.confirm("Are you sure you want to delete this task?")) {
-      fetch(`/api/tasks/${tasks[idx].id}`, {
+      fetch(`https://task-manager-backend-407e.onrender.com/api/tasks/${tasks[idx].id}`, {
         method: "DELETE",
       })
         .then(() => {
@@ -59,7 +59,7 @@ function Tasks() {
   const handleEditSave = (idx) => {
     const updated = [...tasks];
     updated[idx].text = editValue;
-    fetch(`/api/tasks/${tasks[idx].id}`, {
+    fetch(`https://task-manager-backend-407e.onrender.com/api/tasks/${tasks[idx].id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(updated[idx]),
@@ -75,7 +75,7 @@ function Tasks() {
   const handleToggleComplete = (idx) => {
     const updated = [...tasks];
     updated[idx].completed = !updated[idx].completed;
-    fetch(`/api/tasks/${tasks[idx].id}`, {
+    fetch(`https://task-manager-backend-407e.onrender.com/api/tasks/${tasks[idx].id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(updated[idx]),

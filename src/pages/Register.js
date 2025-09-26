@@ -20,7 +20,7 @@ function Register() {
       return;
     }
     try {
-      const response = await fetch('/api/register', {
+      const response = await fetch('https://task-manager-backend-407e.onrender.com/api/register', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
