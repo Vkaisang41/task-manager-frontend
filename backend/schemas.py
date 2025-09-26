@@ -1,40 +1,27 @@
-from marshmallow import Schema, fields, validate
+from flask import Blueprint, request, jsonify
+from models import Task, db
+from schemas import task_schema, tasks_schema
 
-class UserSchema(Schema):
-    id = fields.Int(dump_only=True)
-    username = fields.Str(required=True, validate=validate.Length(min=1, max=80))
-    password = fields.Str(required=True, load_only=True, validate=validate.Length(min=6))
+task_bp = Blueprint('tasks', __name__)
 
-class TaskSchema(Schema):
-    id = fields.Int(dump_only=True)
-    text = fields.Str(required=True, validate=validate.Length(min=1, max=200))
-    completed = fields.Bool()
-    priority = fields.Str(validate=validate.OneOf(['Low', 'Medium', 'High']))
-    due_date = fields.Str()
-    user_id = fields.Int(dump_only=True)
+@task_bp.route('/tasks', methods=['POST'])
+def create_task():
+    data = request.get_json()
+    errors = task_schema.validate(data)
+    if errors:
+        return jsonify(errors), 400
+    
+    new_task = Task(
+        text=data['text'],
+        priority=data.get('priority'),
+        due_date=data.get('due_date'),
+        user_id=data.get('user_id', 1)  # just example
+    )
+    db.session.add(new_task)
+    db.session.commit()
+    return task_schema.jsonify(new_task), 201
 
-class ProjectSchema(Schema):
-    id = fields.Int(dump_only=True)
-    name = fields.Str(required=True, validate=validate.Length(min=1, max=100))
-    category = fields.Str(validate=validate.OneOf(['Work', 'School', 'Personal']))
-    pinned = fields.Bool()
-    user_id = fields.Int(dump_only=True)
-
-class NoteSchema(Schema):
-    id = fields.Int(dump_only=True)
-    text = fields.Str(required=True)
-    pinned = fields.Bool()
-    user_id = fields.Int(dump_only=True)
-
-# Instances
-user_schema = UserSchema()
-users_schema = UserSchema(many=True)
-
-task_schema = TaskSchema()
-tasks_schema = TaskSchema(many=True)
-
-project_schema = ProjectSchema()
-projects_schema = ProjectSchema(many=True)
-
-note_schema = NoteSchema()
-notes_schema = NoteSchema(many=True)
+@task_bp.route('/tasks', methods=['GET'])
+def get_tasks():
+    tasks = Task.query.all()
+    return tasks_schema.jsonify(tasks), 200
