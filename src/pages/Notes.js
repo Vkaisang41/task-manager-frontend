@@ -1,75 +1,100 @@
 import React, { useState, useEffect } from "react";
 
+const API_BASE = process.env.REACT_APP_API_BASE_URL;
+
 function Notes() {
   const [notes, setNotes] = useState([]);
   const [input, setInput] = useState("");
 
   useEffect(() => {
     const token = localStorage.getItem('token');
-    fetch("https://task-manager-backend-407e.onrender.com/api/notes", {
+    fetch(`${API_BASE}/api/notes`, {
       headers: {
-        'Authorization': token
-      }
+        'Authorization': `Bearer ${token}`,
+      },
     })
-      .then((res) => res.json())
-      .then((data) => setNotes(Array.isArray(data) ? data : []));
+      .then(async (res) => {
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(`Failed to fetch notes: ${res.status} - ${text}`);
+        }
+        return res.json();
+      })
+      .then((data) => setNotes(Array.isArray(data) ? data : []))
+      .catch(err => console.error(err.message));
   }, []);
 
   const handleAdd = (e) => {
     e.preventDefault();
     if (input.trim()) {
       const token = localStorage.getItem('token');
-      fetch("https://task-manager-backend-407e.onrender.com/api/notes", {
+      fetch(`${API_BASE}/api/notes`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          'Authorization': token
+          'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({
           text: input.trim(),
           pinned: false,
         }),
       })
-        .then((res) => res.json())
+        .then(async (res) => {
+          if (!res.ok) {
+            const text = await res.text();
+            throw new Error(`Add note failed: ${res.status} - ${text}`);
+          }
+          return res.json();
+        })
         .then((newNote) => {
-          setNotes([...notes, newNote]);
+          setNotes((prev) => [...prev, newNote]);
           setInput("");
-        });
+        })
+        .catch(err => console.error(err.message));
     }
   };
 
   const handleDelete = (id) => {
     const token = localStorage.getItem('token');
-    fetch(`https://task-manager-backend-407e.onrender.com/api/notes/${id}`, {
+    fetch(`${API_BASE}/api/notes/${id}`, {
       method: "DELETE",
       headers: {
-        'Authorization': token
-      }
-    }).then(() => {
-      setNotes(notes.filter((note) => note.id !== id));
-    });
+        'Authorization': `Bearer ${token}`,
+      },
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error(`Delete failed: ${res.status}`);
+        setNotes((prev) => prev.filter((note) => note.id !== id));
+      })
+      .catch(err => console.error(err.message));
   };
 
-  const handlePin = (idx) => {
-    const note = notes[idx];
+  const handlePin = (note) => {
     const token = localStorage.getItem('token');
-    fetch(`https://task-manager-backend-407e.onrender.com/api/notes/${note.id}`, {
+    fetch(`${API_BASE}/api/notes/${note.id}`, {
       method: "PUT",
       headers: {
         "Content-Type": "application/json",
-        'Authorization': token
+        'Authorization': `Bearer ${token}`,
       },
       body: JSON.stringify({
-        ...note,
+        text: note.text,
         pinned: !note.pinned,
       }),
     })
-      .then((res) => res.json())
+      .then(async (res) => {
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(`Pin toggle failed: ${res.status} - ${text}`);
+        }
+        return res.json();
+      })
       .then((updatedNote) => {
-        const updated = [...notes];
-        updated[idx] = updatedNote;
-        setNotes(updated);
-      });
+        setNotes((prev) =>
+          prev.map((n) => (n.id === updatedNote.id ? updatedNote : n))
+        );
+      })
+      .catch(err => console.error(err.message));
   };
 
   // Sort pinned notes first
@@ -78,24 +103,46 @@ function Notes() {
   return (
     <div>
       <h1>Notes</h1>
-      <form onSubmit={handleAdd}>
+      <form onSubmit={handleAdd} style={{ marginBottom: "16px" }}>
         <input
           type="text"
           placeholder="Add a new note"
           value={input}
           onChange={(e) => setInput(e.target.value)}
+          style={{ marginRight: "8px" }}
         />
         <button className="button" type="submit">Add Note</button>
       </form>
-      <ul>
-        {sortedNotes.map((note, idx) => (
-          <li key={note.id} className="card" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: note.pinned ? "#353b48" : undefined }}>
+      <ul style={{ listStyle: "none", paddingLeft: 0 }}>
+        {sortedNotes.map((note) => (
+          <li
+            key={note.id}
+            className="card"
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              background: note.pinned ? "#353b48" : undefined,
+              padding: "8px",
+              marginBottom: "8px",
+              borderRadius: "4px",
+              color: note.pinned ? "white" : "black"
+            }}
+          >
             <span>{note.text}</span>
             <div>
-              <button className="button" style={{ background: "#f39c12", color: "#fff", marginRight: "8px" }} onClick={() => handlePin(idx)}>
+              <button
+                className="button"
+                style={{ background: "#f39c12", color: "#fff", marginRight: "8px" }}
+                onClick={() => handlePin(note)}
+              >
                 {note.pinned ? "Unpin" : "Pin"}
               </button>
-              <button className="button" style={{ background: "#e74c3c", color: "#fff" }} onClick={() => handleDelete(note.id)}>
+              <button
+                className="button"
+                style={{ background: "#e74c3c", color: "#fff" }}
+                onClick={() => handleDelete(note.id)}
+              >
                 Delete
               </button>
             </div>

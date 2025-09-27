@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from "react";
 
+const API_BASE = process.env.REACT_APP_API_BASE_URL;
+
 function Tasks() {
   const [tasks, setTasks] = useState([]);
   const [input, setInput] = useState("");
@@ -7,122 +9,183 @@ function Tasks() {
   const [dueDate, setDueDate] = useState("");
   const [filter, setFilter] = useState("all");
   const [sort, setSort] = useState("date");
-  const [editingIdx, setEditingIdx] = useState(null);
+  const [editingId, setEditingId] = useState(null);
   const [editValue, setEditValue] = useState("");
+  const [editPriority, setEditPriority] = useState("Low");
+  const [editDueDate, setEditDueDate] = useState("");
 
-  // Fetch tasks from backend on mount
+  // Utility to format dates nicely
+  const formatDate = (dateStr) => {
+    if (!dateStr) return "";
+    const d = new Date(dateStr);
+    if (isNaN(d)) return "";
+    return d.toLocaleDateString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
+  };
+
+  // Fetch tasks on mount
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    fetch("https://task-manager-backend-407e.onrender.com/api/tasks", {
-      headers: {
-        'Authorization': token
-      }
+    const token = localStorage.getItem("token");
+    console.log("DEBUG: Fetching tasks from", `${API_BASE}/api/tasks`, "with token:", token);
+    fetch(`${API_BASE}/api/tasks`, {
+      headers: { Authorization: `Bearer ${token}` },
     })
-      .then(res => res.json())
-      .then(data => setTasks(data.map(task => ({
-        ...task,
-        dueDate: task.due_date,
-        completed: Boolean(task.completed)
-      }))));
+      .then((res) => {
+        console.log("DEBUG: Tasks fetch response status:", res.status);
+        return res.json();
+      })
+      .then((data) => {
+        console.log("DEBUG: Tasks data received:", data);
+        setTasks(
+          data.map((task) => ({
+            ...task,
+            dueDate: task.due_date,
+            completed: Boolean(task.completed),
+          }))
+        );
+      })
+      .catch((e) => {
+        console.error("DEBUG: Error fetching tasks:", e);
+        alert("Failed to load tasks");
+      });
   }, []);
 
   const handleAdd = (e) => {
     e.preventDefault();
-    if (input.trim()) {
-      const token = localStorage.getItem('token');
-      fetch("https://task-manager-backend-407e.onrender.com/api/tasks", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          'Authorization': token
-        },
-        body: JSON.stringify({
-          text: input.trim(),
-          completed: false,
-          priority,
-          due_date: dueDate,
-        }),
-      })
-        .then(res => res.json())
-        .then(newTask => {
-          setTasks([...tasks, newTask]);
-          setInput("");
-          setPriority("Low");
-          setDueDate("");
-        });
-    }
-  };
+    if (!input.trim()) return;
 
-  const handleDelete = (idx) => {
-    if (window.confirm("Are you sure you want to delete this task?")) {
-      const token = localStorage.getItem('token');
-      fetch(`https://task-manager-backend-407e.onrender.com/api/tasks/${tasks[idx].id}`, {
-        method: "DELETE",
-        headers: {
-          'Authorization': token
+    const token = localStorage.getItem("token");
+    const payload = {
+      text: input.trim(),
+      completed: false,
+      priority,
+    };
+    if (dueDate) {
+      payload.dueDate = dueDate + 'T00:00:00';
+    }
+    console.log("DEBUG: Adding task with payload:", payload);
+    fetch(`${API_BASE}/api/tasks`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(payload),
+    })
+      .then(async (res) => {
+        console.log("DEBUG: Add task response status:", res.status);
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(`Add task failed: ${res.status} - ${JSON.stringify(data)}`);
         }
+        return data;
       })
-        .then(() => {
-          setTasks(tasks.filter((_, i) => i !== idx));
-        });
-    }
+      .then((newTask) => {
+        console.log("DEBUG: New task added:", newTask);
+        setTasks([
+          ...tasks,
+          {
+            ...newTask,
+            dueDate: newTask.due_date,
+            completed: Boolean(newTask.completed),
+          },
+        ]);
+        setInput("");
+        setPriority("Low");
+        setDueDate("");
+      })
+      .catch((e) => {
+        console.error("DEBUG: Error adding task:", e);
+        alert("Failed to add task");
+      });
   };
 
-  const handleEdit = (idx) => {
-    setEditingIdx(idx);
-    setEditValue(tasks[idx].text);
+  const handleDelete = (task) => {
+    if (!window.confirm("Are you sure you want to delete this task?")) return;
+
+    const token = localStorage.getItem("token");
+    fetch(`${API_BASE}/api/tasks/${task.id}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(() => setTasks(tasks.filter((t) => t.id !== task.id)))
+      .catch(() => alert("Failed to delete task"));
   };
 
-  const handleEditSave = (idx) => {
+  const handleEdit = (task) => {
+    setEditingId(task.id);
+    setEditValue(task.text);
+    setEditPriority(task.priority);
+    setEditDueDate(task.dueDate ? task.dueDate.split('T')[0] : "");
+  };
+
+  const handleEditSave = (task) => {
     if (!editValue.trim()) {
       alert("Task text cannot be empty");
       return;
     }
-    const updated = [...tasks];
-    updated[idx].text = editValue.trim();
-    const token = localStorage.getItem('token');
-    fetch(`https://task-manager-backend-407e.onrender.com/api/tasks/${tasks[idx].id}`, {
+
+    const updatedTask = {
+      ...task,
+      text: editValue.trim(),
+      priority: editPriority,
+      dueDate: editDueDate ? editDueDate + 'T00:00:00' : null,
+    };
+
+    const token = localStorage.getItem("token");
+    fetch(`${API_BASE}/api/tasks/${task.id}`, {
       method: "PUT",
       headers: {
         "Content-Type": "application/json",
-        'Authorization': token
+        Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({
-        ...updated[idx],
-        due_date: updated[idx].dueDate
+        text: updatedTask.text,
+        completed: updatedTask.completed,
+        priority: updatedTask.priority,
+        ...(updatedTask.dueDate && { dueDate: updatedTask.dueDate }),
       }),
     })
-      .then(res => res.json())
+      .then((res) => res.json())
       .then(() => {
-        setTasks(updated);
-        setEditingIdx(null);
+        setTasks(tasks.map((t) => (t.id === task.id ? updatedTask : t)));
+        setEditingId(null);
         setEditValue("");
-      });
+        setEditPriority("Low");
+        setEditDueDate("");
+      })
+      .catch(() => alert("Failed to update task"));
   };
 
-  const handleToggleComplete = (idx) => {
-    const updated = [...tasks];
-    updated[idx].completed = !updated[idx].completed;
-    const token = localStorage.getItem('token');
-    fetch(`https://task-manager-backend-407e.onrender.com/api/tasks/${tasks[idx].id}`, {
+  const handleToggleComplete = (task) => {
+    const updatedTask = { ...task, completed: !task.completed };
+
+    const token = localStorage.getItem("token");
+    fetch(`${API_BASE}/api/tasks/${task.id}`, {
       method: "PUT",
       headers: {
         "Content-Type": "application/json",
-        'Authorization': token
+        Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({
-        ...updated[idx],
-        due_date: updated[idx].dueDate
+        text: updatedTask.text,
+        completed: updatedTask.completed,
+        priority: updatedTask.priority,
+        ...(updatedTask.dueDate && { dueDate: updatedTask.dueDate }),
       }),
     })
-      .then(res => res.json())
+      .then((res) => res.json())
       .then(() => {
-        setTasks(updated);
-      });
+        setTasks(tasks.map((t) => (t.id === task.id ? updatedTask : t)));
+      })
+      .catch(() => alert("Failed to update task"));
   };
 
   // Filtering
-  const filteredTasks = tasks.filter(task => {
+  const filteredTasks = tasks.filter((task) => {
     if (filter === "completed") return task.completed;
     if (filter === "pending") return !task.completed;
     return true;
@@ -143,15 +206,22 @@ function Tasks() {
   return (
     <div>
       <h1>Tasks</h1>
-      <form onSubmit={handleAdd} style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+      <form
+        onSubmit={handleAdd}
+        style={{ display: "flex", gap: 8, flexWrap: "wrap" }}
+      >
         <input
           type="text"
           placeholder="Add a new task"
           value={input}
-          onChange={e => setInput(e.target.value)}
+          onChange={(e) => setInput(e.target.value)}
           style={{ flex: 2 }}
         />
-        <select value={priority} onChange={e => setPriority(e.target.value)} style={{ flex: 1 }}>
+        <select
+          value={priority}
+          onChange={(e) => setPriority(e.target.value)}
+          style={{ flex: 1 }}
+        >
           <option value="Low">Low</option>
           <option value="Medium">Medium</option>
           <option value="High">High</option>
@@ -159,19 +229,21 @@ function Tasks() {
         <input
           type="date"
           value={dueDate}
-          onChange={e => setDueDate(e.target.value)}
+          onChange={(e) => setDueDate(e.target.value)}
           style={{ flex: 1 }}
         />
-        <button className="button" type="submit" style={{ flex: 1 }}>Add Task</button>
+        <button className="button" type="submit" style={{ flex: 1 }}>
+          Add Task
+        </button>
       </form>
 
       <div style={{ margin: "16px 0", display: "flex", gap: 12 }}>
-        <select value={filter} onChange={e => setFilter(e.target.value)}>
+        <select value={filter} onChange={(e) => setFilter(e.target.value)}>
           <option value="all">All</option>
           <option value="completed">Completed</option>
           <option value="pending">Pending</option>
         </select>
-        <select value={sort} onChange={e => setSort(e.target.value)}>
+        <select value={sort} onChange={(e) => setSort(e.target.value)}>
           <option value="date">Sort by Due Date</option>
           <option value="priority">Sort by Priority</option>
           <option value="name">Sort by Name</option>
@@ -179,12 +251,13 @@ function Tasks() {
       </div>
 
       <ul>
-        {sortedTasks.map((task, idx) => {
-          const overdue = task.dueDate && new Date(task.dueDate) < new Date() && !task.completed;
+        {sortedTasks.map((task) => {
+          const overdue =
+            task.dueDate && new Date(task.dueDate) < new Date() && !task.completed;
           return (
             <li
               className="card"
-              key={idx}
+              key={task.id}
               style={{
                 display: "flex",
                 justifyContent: "space-between",
@@ -205,55 +278,112 @@ function Tasks() {
                 <input
                   type="checkbox"
                   checked={task.completed}
-                  onChange={() => handleToggleComplete(idx)}
+                  onChange={() => handleToggleComplete(task)}
                   style={{ accentColor: "#61dafb" }}
+                  aria-label={`Mark task "${task.text}" as completed`}
                 />
-                {editingIdx === idx ? (
-                  <input
-                    type="text"
-                    value={editValue}
-                    onChange={e => setEditValue(e.target.value)}
-                    style={{ marginRight: "12px", flex: 1 }}
-                  />
+                {editingId === task.id ? (
+                  <>
+                    <input
+                      type="text"
+                      value={editValue}
+                      onChange={(e) => setEditValue(e.target.value)}
+                      style={{ marginRight: "12px", flex: 1 }}
+                      aria-label="Edit task text"
+                    />
+                    <select
+                      value={editPriority}
+                      onChange={(e) => setEditPriority(e.target.value)}
+                      style={{ marginRight: "12px" }}
+                      aria-label="Edit task priority"
+                    >
+                      <option value="Low">Low</option>
+                      <option value="Medium">Medium</option>
+                      <option value="High">High</option>
+                    </select>
+                    <input
+                      type="date"
+                      value={editDueDate}
+                      onChange={(e) => setEditDueDate(e.target.value)}
+                      aria-label="Edit task due date"
+                    />
+                  </>
                 ) : (
-                  <span>{task.text}</span>
-                )}
-                <span
-                  style={{
-                    fontWeight: "bold",
-                    color:
-                      task.priority === "High"
-                        ? "#e74c3c"
-                        : task.priority === "Medium"
-                        ? "#f39c12"
-                        : "#27ae60",
-                    marginLeft: 8,
-                  }}
-                >
-                  {task.priority}
-                </span>
-                {task.dueDate && (
-                  <span style={{ marginLeft: 8, color: overdue ? "#e74c3c" : "#b2becd" }}>
-                    Due: {task.dueDate}
-                  </span>
+                  <>
+                    <span>{task.text}</span>
+                    <span
+                      style={{
+                        fontWeight: "bold",
+                        color:
+                          task.priority === "High"
+                            ? "#e74c3c"
+                            : task.priority === "Medium"
+                            ? "#f39c12"
+                            : "#27ae60",
+                        marginLeft: 8,
+                      }}
+                    >
+                      {task.priority}
+                    </span>
+                    {task.dueDate && (
+                      <span
+                        style={{
+                          marginLeft: 8,
+                          color: overdue ? "#e74c3c" : "#b2becd",
+                        }}
+                      >
+                        Due: {formatDate(task.dueDate)}
+                      </span>
+                    )}
+                  </>
                 )}
               </div>
               <div>
-                {editingIdx === idx ? (
+                {editingId === task.id ? (
                   <>
-                    <button className="button" style={{ background: "#27ae60", color: "#fff", marginRight: "8px", padding: "6px 14px" }} onClick={() => handleEditSave(idx)}>
+                    <button
+                      className="button"
+                      style={{
+                        background: "#27ae60",
+                        color: "#fff",
+                        marginRight: "8px",
+                        padding: "6px 14px",
+                      }}
+                      onClick={() => handleEditSave(task)}
+                    >
                       Save
                     </button>
-                    <button className="button" style={{ background: "#7f8c8d", color: "#fff", padding: "6px 14px" }} onClick={() => setEditingIdx(null)}>
+                    <button
+                      className="button"
+                      style={{
+                        background: "#7f8c8d",
+                        color: "#fff",
+                        padding: "6px 14px",
+                      }}
+                      onClick={() => setEditingId(null)}
+                    >
                       Cancel
                     </button>
                   </>
                 ) : (
                   <>
-                    <button className="button" style={{ background: "#2980b9", color: "#fff", marginRight: "8px", padding: "6px 14px" }} onClick={() => handleEdit(idx)}>
+                    <button
+                      className="button"
+                      style={{
+                        background: "#2980b9",
+                        color: "#fff",
+                        marginRight: "8px",
+                        padding: "6px 14px",
+                      }}
+                      onClick={() => handleEdit(task)}
+                    >
                       Edit
                     </button>
-                    <button className="button" style={{ background: "#e74c3c", color: "#fff", padding: "6px 14px" }} onClick={() => handleDelete(idx)}>
+                    <button
+                      className="button"
+                      style={{ background: "#e74c3c", color: "#fff", padding: "6px 14px" }}
+                      onClick={() => handleDelete(task)}
+                    >
                       Delete
                     </button>
                   </>

@@ -1,34 +1,52 @@
+// src/components/Projects.js
 import React, { useState, useEffect } from "react";
+
+const API_BASE = process.env.REACT_APP_API_BASE_URL || "http://localhost:8001";
 
 function Projects() {
   const [projects, setProjects] = useState([]);
   const [input, setInput] = useState("");
   const [category, setCategory] = useState("Work");
-  const [editingIdx, setEditingIdx] = useState(null);
+  const [editingId, setEditingId] = useState(null);
   const [editValue, setEditValue] = useState("");
   const [editCategory, setEditCategory] = useState("Work");
   const [filter, setFilter] = useState("all");
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    fetch('https://task-manager-backend-407e.onrender.com/api/projects', {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      console.warn("No token found, please log in.");
+      return;
+    }
+
+    fetch(`${API_BASE}/api/projects`, {
       headers: {
-        'Authorization': token
-      }
+        Authorization: `Bearer ${token}`,
+      },
     })
-      .then((res) => res.json())
-      .then((data) => setProjects(Array.isArray(data) ? data : []));
+      .then(async (res) => {
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(`Failed to fetch projects: ${res.status} - ${text}`);
+        }
+        return res.json();
+      })
+      .then((data) => {
+        const safeProjects = (Array.isArray(data) ? data : []).filter((p) => p?.id);
+        setProjects(safeProjects);
+      })
+      .catch((err) => console.error(err.message));
   }, []);
 
   const handleAdd = (e) => {
     e.preventDefault();
     if (input.trim()) {
-      const token = localStorage.getItem('token');
-      fetch('https://task-manager-backend-407e.onrender.com/api/projects', {
+      const token = localStorage.getItem("token");
+      fetch(`${API_BASE}/api/projects`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          'Authorization': token
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           name: input.trim(),
@@ -36,45 +54,58 @@ function Projects() {
           pinned: false,
         }),
       })
-        .then((res) => res.json())
+        .then(async (res) => {
+          if (!res.ok) {
+            const text = await res.text();
+            throw new Error(`Add project failed: ${res.status} - ${text}`);
+          }
+          return res.json();
+        })
         .then((newProject) => {
-          setProjects([...projects, newProject]);
-          setInput("");
-          setCategory("Work");
-        });
+          if (newProject?.id) {
+            setProjects([...projects, newProject]);
+            setInput("");
+            setCategory("Work");
+          }
+        })
+        .catch((err) => console.error(err.message));
     }
   };
 
   const handleDelete = (id) => {
-    const token = localStorage.getItem('token');
-    fetch(`https://task-manager-backend-407e.onrender.com/api/projects/${id}`, {
+    if (!id) return;
+    const token = localStorage.getItem("token");
+    fetch(`${API_BASE}/api/projects/${id}`, {
       method: "DELETE",
       headers: {
-        'Authorization': token
-      }
-    }).then(() => {
-      setProjects(projects.filter((project) => project.id !== id));
-    });
+        Authorization: `Bearer ${token}`,
+      },
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error(`Delete failed: ${res.status}`);
+        setProjects(projects.filter((project) => project.id !== id));
+      })
+      .catch((err) => console.error(err.message));
   };
 
-  const handleEdit = (idx) => {
-    setEditingIdx(idx);
-    setEditValue(projects[idx].name);
-    setEditCategory(projects[idx].category);
+  const handleEdit = (project) => {
+    setEditingId(project.id);
+    setEditValue(project.name || "");
+    setEditCategory(project.category || "Work");
   };
 
-  const handleEditSave = (idx) => {
-    if (!editValue.trim()) {
-      alert("Project name cannot be empty");
+  const handleEditSave = (project) => {
+    if (!project?.id || !editValue.trim()) {
+      alert("Invalid project or empty name");
       return;
     }
-    const project = projects[idx];
-    const token = localStorage.getItem('token');
-    fetch(`https://task-manager-backend-407e.onrender.com/api/projects/${project.id}`, {
+
+    const token = localStorage.getItem("token");
+    fetch(`${API_BASE}/api/projects/${project.id}`, {
       method: "PUT",
       headers: {
         "Content-Type": "application/json",
-        'Authorization': token
+        Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({
         name: editValue.trim(),
@@ -82,46 +113,61 @@ function Projects() {
         pinned: project.pinned || false,
       }),
     })
-      .then((res) => res.json())
+      .then(async (res) => {
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(`Update failed: ${res.status} - ${text}`);
+        }
+        return res.json();
+      })
       .then((updatedProject) => {
-        const updated = [...projects];
-        updated[idx] = updatedProject;
-        setProjects(updated);
-        setEditingIdx(null);
+        setProjects(projects.map((p) => (p.id === project.id ? updatedProject : p)));
+        setEditingId(null);
         setEditValue("");
-      });
+      })
+      .catch((err) => console.error(err.message));
   };
 
-  const handlePin = (idx) => {
-    const project = projects[idx];
-    const token = localStorage.getItem('token');
-    fetch(`https://task-manager-backend-407e.onrender.com/api/projects/${project.id}`, {
+  const handlePin = (project) => {
+    if (!project?.id) return;
+    const token = localStorage.getItem("token");
+
+    fetch(`${API_BASE}/api/projects/${project.id}`, {
       method: "PUT",
       headers: {
         "Content-Type": "application/json",
-        'Authorization': token
+        Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({
-        ...project,
+        name: project.name,
+        category: project.category,
         pinned: !project.pinned,
       }),
     })
-      .then((res) => res.json())
+      .then(async (res) => {
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(`Pin toggle failed: ${res.status} - ${text}`);
+        }
+        return res.json();
+      })
       .then((updatedProject) => {
-        const updated = [...projects];
-        updated[idx] = updatedProject;
-        setProjects(updated);
-      });
+        setProjects(projects.map((p) => (p.id === project.id ? updatedProject : p)));
+      })
+      .catch((err) => console.error(err.message));
   };
 
-  // Filter and sort: pinned projects first, then by filter
   const filteredProjects = projects
     .filter((project) => filter === "all" || project.category === filter)
-    .sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
+    .sort((a, b) => {
+      if (a.pinned === b.pinned) return 0;
+      return a.pinned ? -1 : 1;
+    });
 
   return (
     <div>
       <h1>Projects</h1>
+
       <form onSubmit={handleAdd} style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         <input
           type="text"
@@ -154,9 +200,22 @@ function Projects() {
       </div>
 
       <ul>
-        {filteredProjects.map((project, idx) => (
-          <li key={project.id} className="card" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: project.pinned ? "#353b48" : undefined }}>
-            {editingIdx === idx ? (
+        {filteredProjects.map((project) => (
+          <li
+            key={project.id}
+            className="card"
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              background: project.pinned ? "#353b48" : undefined,
+              padding: "8px",
+              marginBottom: "8px",
+              borderRadius: "4px",
+              color: project.pinned ? "white" : "black",
+            }}
+          >
+            {editingId === project.id ? (
               <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1 }}>
                 <input
                   type="text"
@@ -173,10 +232,18 @@ function Projects() {
                   <option value="School">School</option>
                   <option value="Personal">Personal</option>
                 </select>
-                <button className="button" style={{ background: "#27ae60", color: "#fff", marginRight: "8px" }} onClick={() => handleEditSave(idx)}>
+                <button
+                  className="button"
+                  style={{ background: "#27ae60", color: "#fff", marginRight: "8px" }}
+                  onClick={() => handleEditSave(project)}
+                >
                   Save
                 </button>
-                <button className="button" style={{ background: "#7f8c8d", color: "#fff" }} onClick={() => setEditingIdx(null)}>
+                <button
+                  className="button"
+                  style={{ background: "#7f8c8d", color: "#fff" }}
+                  onClick={() => setEditingId(null)}
+                >
                   Cancel
                 </button>
               </div>
@@ -186,13 +253,25 @@ function Projects() {
                   {project.name} ({project.category})
                 </span>
                 <div>
-                  <button className="button" style={{ background: "#f39c12", color: "#fff", marginRight: "8px" }} onClick={() => handlePin(idx)}>
+                  <button
+                    className="button"
+                    style={{ background: "#f39c12", color: "#fff", marginRight: "8px" }}
+                    onClick={() => handlePin(project)}
+                  >
                     {project.pinned ? "Unpin" : "Pin"}
                   </button>
-                  <button className="button" style={{ background: "#2980b9", color: "#fff", marginRight: "8px" }} onClick={() => handleEdit(idx)}>
+                  <button
+                    className="button"
+                    style={{ background: "#2980b9", color: "#fff", marginRight: "8px" }}
+                    onClick={() => handleEdit(project)}
+                  >
                     Edit
                   </button>
-                  <button className="button" style={{ background: "#e74c3c", color: "#fff" }} onClick={() => handleDelete(project.id)}>
+                  <button
+                    className="button"
+                    style={{ background: "#e74c3c", color: "#fff" }}
+                    onClick={() => handleDelete(project.id)}
+                  >
                     Delete
                   </button>
                 </div>

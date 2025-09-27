@@ -1,12 +1,17 @@
+// src/components/Login.js
 import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { Formik, Form, Field, ErrorMessage } from "formik";
 import * as Yup from "yup";
 
+const API_BASE = process.env.REACT_APP_API_BASE_URL || "http://localhost:8001";
+
 const validationSchema = Yup.object({
   username: Yup.string().required("Username is required"),
   password: Yup.string().required("Password is required"),
 });
+
+const errorStyle = { color: "red", marginTop: 4, marginBottom: 8 };
 
 function Login({ onLogin }) {
   const [showPassword, setShowPassword] = useState(false);
@@ -14,25 +19,33 @@ function Login({ onLogin }) {
 
   const handleSubmit = async (values, { setSubmitting, setErrors }) => {
     try {
-      const response = await fetch('https://task-manager-backend-407e.onrender.com/api/login', {
-        method: 'POST',
+      const response = await fetch(`${API_BASE}/api/login`, {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify(values),
       });
-      if (response.ok) {
-        const data = await response.json();
-        onLogin(data.token);
+
+      const data = await response.json();
+
+      if (response.ok && data.token) {
+        // ✅ Save token to localStorage
+        localStorage.setItem("token", data.token);
+
+        // Optional callback
+        if (onLogin) onLogin(data.token);
+
+        // Redirect to home or projects page
         navigate("/");
       } else {
-        const errorData = await response.json();
-        setErrors({ general: errorData.msg || "Login failed" });
+        setErrors({ general: data.msg || "Login failed" });
       }
-    } catch (err) {
+    } catch {
       setErrors({ general: "Network error" });
+    } finally {
+      setSubmitting(false);
     }
-    setSubmitting(false);
   };
 
   return (
@@ -53,19 +66,19 @@ function Login({ onLogin }) {
               placeholder="Enter your username"
               autoComplete="username"
             />
-            <ErrorMessage name="username" component="div" style={{ color: 'red' }} />
+            <ErrorMessage name="username" component="div" style={errorStyle} />
 
             <label htmlFor="password">Password</label>
             <Field
               id="password"
               name="password"
-              type={showPassword ? 'text' : 'password'}
+              type={showPassword ? "text" : "password"}
               placeholder="Enter your password"
               autoComplete="current-password"
             />
-            <ErrorMessage name="password" component="div" style={{ color: 'red' }} />
+            <ErrorMessage name="password" component="div" style={errorStyle} />
 
-            <label>
+            <label style={{ display: "flex", alignItems: "center", gap: 8, margin: "8px 0" }}>
               <input
                 type="checkbox"
                 checked={showPassword}
@@ -73,12 +86,23 @@ function Login({ onLogin }) {
               />
               Show password
             </label>
-            <button className="button" type="submit" disabled={isSubmitting}>Login</button>
-            {errors.general && <p style={{ color: 'red' }}>{errors.general}</p>}
+
+            <button className="button" type="submit" disabled={isSubmitting}>
+              {isSubmitting ? "Logging in..." : "Login"}
+            </button>
+
+            {errors.general && (
+              <p style={errorStyle} role="alert" aria-live="assertive">
+                {errors.general}
+              </p>
+            )}
           </Form>
         )}
       </Formik>
-      <p>Don't have an account? <Link to="/register">Register here</Link></p>
+
+      <p>
+        Don't have an account? <Link to="/register">Register here</Link>
+      </p>
     </div>
   );
 }

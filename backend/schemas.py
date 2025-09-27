@@ -1,40 +1,24 @@
-from marshmallow import Schema, fields, validate
+from marshmallow import Schema, fields
 
-class UserSchema(Schema):
-    id = fields.Int(dump_only=True)
-    username = fields.Str(required=True, validate=validate.Length(min=1, max=80))
-    password = fields.Str(required=True, load_only=True, validate=validate.Length(min=6))
+user_schema = Schema.from_dict({
+    "username": fields.Str(required=True),
+    "password": fields.Str(required=True)
+})()
 
-class TaskSchema(Schema):
-    id = fields.Int(dump_only=True)
-    text = fields.Str(required=True, validate=validate.Length(min=1, max=500))
-    completed = fields.Bool()
-    priority = fields.Str(validate=validate.OneOf(['Low','Medium','High']), allow_none=True)
-    dueDate = fields.Str(allow_none=True)  # matches frontend camelCase
-    user_id = fields.Int(dump_only=True)
+task_schema = Schema.from_dict({
+    "text": fields.Str(required=True),
+    "completed": fields.Bool(),
+    "priority": fields.Str(),
+    "dueDate": fields.DateTime()
+})()
 
-class ProjectSchema(Schema):
-    id = fields.Int(dump_only=True)
-    name = fields.Str(required=True, validate=validate.Length(min=1, max=200))
-    category = fields.Str(validate=validate.OneOf(['Work','School','Personal']), allow_none=True)
-    pinned = fields.Bool()
-    user_id = fields.Int(dump_only=True)
+project_schema = Schema.from_dict({
+    "name": fields.Str(required=True),
+    "category": fields.Str(),
+    "pinned": fields.Bool()
+})()
 
-class NoteSchema(Schema):
-    id = fields.Int(dump_only=True)
-    text = fields.Str(required=True, validate=validate.Length(min=1))
-    pinned = fields.Bool()
-    user_id = fields.Int(dump_only=True)
-
-# Instances
-user_schema = UserSchema()
-users_schema = UserSchema(many=True)
-
-task_schema = TaskSchema()
-tasks_schema = TaskSchema(many=True)
-
-project_schema = ProjectSchema()
-projects_schema = ProjectSchema(many=True)
-
-note_schema = NoteSchema()
-notes_schema = NoteSchema(many=True)
+note_schema = Schema.from_dict({
+    "text": fields.Str(required=True),
+    "pinned": fields.Bool()
+})()

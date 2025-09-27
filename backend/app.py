@@ -3,6 +3,7 @@ import time
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from werkzeug.security import generate_password_hash, check_password_hash
+from marshmallow import ValidationError
 
 from models import db, User, Task, Project, Note, TaskProject
 from schemas import user_schema, task_schema, project_schema, note_schema
@@ -41,26 +42,39 @@ def register():
 @app.route("/api/login", methods=["POST"])
 def login():
     data = request.get_json() or {}
+    print(f"DEBUG: Login attempt for username: {data.get('username')}")
     if not data.get("username") or not data.get("password"):
+        print("DEBUG: Invalid login request - missing fields")
         return jsonify({"msg": "Invalid request"}), 400
     user = User.query.filter_by(username=data["username"]).first()
     if user and check_password_hash(user.password, data["password"]):
         token = f"token_{user.id}_{int(time.time())}"
+        print(f"DEBUG: Login successful for user {user.username}, token: {token}")
         return jsonify({"token": token, "user": user.to_dict()}), 200
+    print("DEBUG: Login failed - wrong credentials")
     return jsonify({"msg": "Wrong credentials"}), 401
 
 
 def get_current_user():
     token = request.headers.get("Authorization")
     if not token:
+        print("DEBUG: No Authorization header")
         return None
+    # Strip "Bearer " prefix if present
+    if token.startswith("Bearer "):
+        token = token[7:]
+    print(f"DEBUG: Token received: {token}")
     try:
         parts = token.split("_")
         if len(parts) >= 2 and parts[0] == "token":
             user_id = int(parts[1])
-            return User.query.get(user_id)
-    except Exception:
-        pass
+            user = User.query.get(user_id)
+            print(f"DEBUG: User found: {user.username if user else None}")
+            return user
+        else:
+            print("DEBUG: Token format invalid")
+    except Exception as e:
+        print(f"DEBUG: Exception parsing token: {e}")
     return None
 
 
@@ -69,7 +83,9 @@ def get_current_user():
 def get_tasks():
     user = get_current_user()
     if not user:
+        print("DEBUG: Unauthorized access to tasks")
         return jsonify({"msg": "Unauthorized"}), 401
+    print(f"DEBUG: Getting tasks for user {user.username}, count: {len(Task.query.filter_by(user_id=user.id).all())}")
     tasks = Task.query.filter_by(user_id=user.id).all()
     return jsonify([t.to_dict() for t in tasks]), 200
 
@@ -78,20 +94,25 @@ def get_tasks():
 def add_task():
     user = get_current_user()
     if not user:
+        print("DEBUG: Unauthorized add task")
         return jsonify({"msg": "Unauthorized"}), 401
     data = request.get_json() or {}
-    errors = task_schema.validate(data)
-    if errors:
-        return jsonify({"errors": errors}), 400
+    print(f"DEBUG: Add task data: {data}")
+    try:
+        deserialized = task_schema.load(data)
+    except ValidationError as err:
+        print(f"DEBUG: Validation errors: {err.messages}")
+        return jsonify({"errors": err.messages}), 400
     new_task = Task(
-        text=data["text"],
-        completed=data.get("completed", False),
-        priority=data.get("priority"),
-        due_date=data.get("dueDate"),
+        text=deserialized["text"],
+        completed=deserialized.get("completed", False),
+        priority=deserialized.get("priority"),
+        due_date=deserialized.get("dueDate"),
         user_id=user.id
     )
     db.session.add(new_task)
     db.session.commit()
+    print(f"DEBUG: Task added for user {user.username}: {new_task.text}")
     return jsonify(new_task.to_dict()), 201
 
 
@@ -102,13 +123,16 @@ def update_task(task_id):
         return jsonify({"msg": "Unauthorized"}), 401
     task = Task.query.filter_by(id=task_id, user_id=user.id).first_or_404()
     data = request.get_json() or {}
-    errors = task_schema.validate(data)
-    if errors:
-        return jsonify({"errors": errors}), 400
-    task.text = data["text"]
-    task.completed = data.get("completed", task.completed)
-    task.priority = data.get("priority", task.priority)
-    task.due_date = data.get("dueDate", task.due_date)
+    try:
+        deserialized = task_schema.load(data)
+    except ValidationError as err:
+        return jsonify({"errors": err.messages}), 400
+
+    # Update fields - only if provided, else keep current
+    task.text = deserialized.get("text", task.text)
+    task.completed = deserialized.get("completed", task.completed)
+    task.priority = deserialized.get("priority", task.priority)
+    task.due_date = deserialized.get("dueDate", task.due_date)
     db.session.commit()
     return jsonify(task.to_dict()), 200
 
@@ -164,8 +188,10 @@ def update_project(project_id):
     errors = project_schema.validate(data)
     if errors:
         return jsonify({"errors": errors}), 400
-    project.name = data["name"]
-    project.category = data.get("category")
+
+    # Update only provided fields
+    project.name = data.get("name", project.name)
+    project.category = data.get("category", project.category)
     project.pinned = data.get("pinned", project.pinned)
     db.session.commit()
     return jsonify(project.to_dict()), 200
@@ -221,7 +247,8 @@ def update_note(note_id):
     errors = note_schema.validate(data)
     if errors:
         return jsonify({"errors": errors}), 400
-    note.text = data["text"]
+
+    note.text = data.get("text", note.text)
     note.pinned = data.get("pinned", note.pinned)
     db.session.commit()
     return jsonify(note.to_dict()), 200
@@ -295,4 +322,4 @@ def catch_all(path):
 
 # ---------------- LOCAL DEV ----------------
 if __name__ == "__main__":
-    app.run(port=8000, debug=True)
+    app.run(port=8001, debug=True)
