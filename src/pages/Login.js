@@ -17,6 +17,10 @@ function Login({ onLogin }) {
   const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
 
+  React.useEffect(() => {
+    console.log("TRACKING: User visited Login page");
+  }, []);
+
   const handleSubmit = async (values, { setSubmitting, setErrors }) => {
     try {
       const response = await fetch(`${API_BASE}/api/login`, {
@@ -30,15 +34,18 @@ function Login({ onLogin }) {
       const data = await response.json();
 
       if (response.ok && data.token) {
-        // ✅ Save token to localStorage
+        console.log("TRACKING: User logged in at", new Date().toISOString());
+        // ✅ Save token and user to localStorage
         localStorage.setItem("token", data.token);
+        localStorage.setItem("user", JSON.stringify(data.user));
 
         // Optional callback
-        if (onLogin) onLogin(data.token);
+        if (onLogin) onLogin(data.token, data.user);
 
         // Redirect to home or projects page
         navigate("/");
       } else {
+        console.log("TRACKING: Failed login attempt at", new Date().toISOString());
         setErrors({ general: data.msg || "Login failed" });
       }
     } catch {

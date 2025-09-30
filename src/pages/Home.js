@@ -1,14 +1,17 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { FaTasks, FaFolderOpen, FaStickyNote, FaMoon, FaSun, FaSearch, FaSort, FaListUl } from "react-icons/fa";
+import TrackingLogs from "../components/TrackingLogs";
 
 function Home() {
   const [darkMode, setDarkMode] = useState(true);
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState("date");
   const [showFeatures, setShowFeatures] = useState(false);
+  const [showTracking, setShowTracking] = useState(false);
 
   useEffect(() => {
+    console.log("TRACKING: User visited Home page");
     document.body.style.background = darkMode ? "#181a20" : "#f5f6fa";
     document.body.style.color = darkMode ? "#e4e8ef" : "#23272f";
   }, [darkMode]);
@@ -106,6 +109,18 @@ function Home() {
         </button>
       </div>
 
+      {/* Tracking Logs Button */}
+      <div style={{ marginTop: "16px" }}>
+        <button
+          className="button"
+          onClick={() => setShowTracking((prev) => !prev)}
+          style={{ display: "flex", alignItems: "center", gap: 8 }}
+        >
+          <FaListUl />
+          {showTracking ? "Hide Tracking Logs" : "Show Tracking Logs"}
+        </button>
+      </div>
+
       {/* Features List (toggle) */}
       {showFeatures && (
         <div style={{ marginTop: "24px" }}>
@@ -122,6 +137,13 @@ function Home() {
             <li> <strong>User Authentication:</strong> Secure login and registration.</li>
             <li> <strong>Drag & Drop:</strong> Rearrange tasks and projects easily.</li>
           </ul>
+        </div>
+      )}
+
+      {/* Tracking Logs Section */}
+      {showTracking && (
+        <div style={{ marginTop: "24px" }}>
+          <TrackingLogs />
         </div>
       )}
 

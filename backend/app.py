@@ -5,7 +5,7 @@ from flask_cors import CORS
 from werkzeug.security import generate_password_hash, check_password_hash
 from marshmallow import ValidationError
 
-from models import db, User, Task, Project, Note, TaskProject
+from models import db, User, Task, Project, Note, TaskProject, ROLE_ADMIN, ROLE_MANAGER, ROLE_USER
 from schemas import user_schema, task_schema, project_schema, note_schema
 
 # ---------------- APP CONFIG ----------------
@@ -14,7 +14,7 @@ app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev_secret_key")
 app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL", "sqlite:///tasks.db")
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
-CORS(app)
+CORS(app, origins=["http://localhost:3000"])
 db.init_app(app)
 
 with app.app_context():
@@ -33,7 +33,8 @@ def register():
         return jsonify({"msg": "Username already exists"}), 409
 
     password_hash = generate_password_hash(data["password"])
-    new_user = User(username=data["username"], password=password_hash)
+    role = data.get("role", "user")
+    new_user = User(username=data["username"], password=password_hash, role=role)
     db.session.add(new_user)
     db.session.commit()
     return jsonify({"msg": "User registered"}), 201

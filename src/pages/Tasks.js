@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import Notification from "../components/Notification";
 
 const API_BASE = process.env.REACT_APP_API_BASE_URL || "";
 
@@ -13,6 +14,7 @@ function Tasks() {
   const [editValue, setEditValue] = useState("");
   const [editPriority, setEditPriority] = useState("Low");
   const [editDueDate, setEditDueDate] = useState("");
+  const [notifications, setNotifications] = useState([]);
 
   // Utility to format dates nicely
   const formatDate = (dateStr) => {
@@ -28,6 +30,7 @@ function Tasks() {
 
   // Fetch tasks on mount
   useEffect(() => {
+    console.log("TRACKING: User visited Tasks page");
     const token = localStorage.getItem("token");
     console.log("DEBUG: Fetching tasks from", `${API_BASE}/api/tasks`, "with token:", token);
     fetch(`${API_BASE}/api/tasks`, {
@@ -39,13 +42,25 @@ function Tasks() {
       })
       .then((data) => {
         console.log("DEBUG: Tasks data received:", data);
-        setTasks(
-          data.map((task) => ({
-            ...task,
-            dueDate: task.due_date,
-            completed: Boolean(task.completed),
-          }))
-        );
+        const processedTasks = data.map((task) => ({
+          ...task,
+          dueDate: task.due_date,
+          completed: Boolean(task.completed),
+        }));
+        setTasks(processedTasks);
+        // Check for notifications: overdue tasks
+        const overdueTasks = processedTasks.filter(task => task.dueDate && new Date(task.dueDate) < new Date() && !task.completed);
+        if (overdueTasks.length > 0) {
+          console.log("NOTIFICATION: You have", overdueTasks.length, "overdue tasks");
+          const newNotifications = overdueTasks.map(task => ({
+            id: `overdue-${task.id}`,
+            message: `Task "${task.text}" is overdue!`,
+            type: 'error'
+          }));
+          setNotifications(newNotifications);
+        } else {
+          setNotifications([]);
+        }
       })
       .catch((e) => {
         console.error("DEBUG: Error fetching tasks:", e);
@@ -66,7 +81,7 @@ function Tasks() {
     if (dueDate) {
       payload.dueDate = dueDate + 'T00:00:00';
     }
-    console.log("DEBUG: Adding task with payload:", payload);
+    console.log("TRACKING: Task created -", payload.text, "by user at", new Date().toISOString());
     fetch(`${API_BASE}/api/tasks`, {
       method: "POST",
       headers: {
@@ -106,6 +121,7 @@ function Tasks() {
   const handleDelete = (task) => {
     if (!window.confirm("Are you sure you want to delete this task?")) return;
 
+    console.log("AUDIT: Task deleted -", task.text, "by user at", new Date().toISOString());
     const token = localStorage.getItem("token");
     fetch(`${API_BASE}/api/tasks/${task.id}`, {
       method: "DELETE",
@@ -135,6 +151,7 @@ function Tasks() {
       dueDate: editDueDate ? editDueDate + 'T00:00:00' : null,
     };
 
+    console.log("TRACKING: Task updated -", updatedTask.text, "by user at", new Date().toISOString());
     const token = localStorage.getItem("token");
     fetch(`${API_BASE}/api/tasks/${task.id}`, {
       method: "PUT",
@@ -162,6 +179,7 @@ function Tasks() {
 
   const handleToggleComplete = (task) => {
     const updatedTask = { ...task, completed: !task.completed };
+    console.log("TRACKING: Task", updatedTask.completed ? "completed" : "marked incomplete -", updatedTask.text, "by user at", new Date().toISOString());
 
     const token = localStorage.getItem("token");
     fetch(`${API_BASE}/api/tasks/${task.id}`, {
@@ -205,7 +223,50 @@ function Tasks() {
 
   return (
     <div>
+      {notifications.map(notification => (
+        <Notification
+          key={notification.id}
+          message={notification.message}
+          type={notification.type}
+          onClose={() => setNotifications(notifications.filter(n => n.id !== notification.id))}
+        />
+      ))}
       <h1>Tasks</h1>
+
+      {/* Progress Bar */}
+      <div style={{ marginBottom: '16px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+          <span>Progress: {tasks.filter(task => task.completed).length} / {tasks.length} completed</span>
+          <span>{tasks.length > 0 ? Math.round((tasks.filter(task => task.completed).length / tasks.length) * 100) : 0}%</span>
+        </div>
+        <div style={{
+          width: '100%',
+          height: '10px',
+          backgroundColor: '#e0e0e0',
+          borderRadius: '5px',
+          overflow: 'hidden'
+        }}>
+          <div style={{
+            width: `${tasks.length > 0 ? Math.round((tasks.filter(task => task.completed).length / tasks.length) * 100) : 0}%`,
+            height: '100%',
+            backgroundColor: '#27ae60',
+            transition: 'width 0.3s ease'
+          }}></div>
+        </div>
+        <div style={{ marginTop: '8px', fontSize: '12px', color: '#666' }}>
+          {tasks.filter(task => task.dueDate && new Date(task.dueDate) < new Date() && !task.completed).length > 0 && (
+            <span style={{ color: '#e74c3c' }}>
+              ⚠️ {tasks.filter(task => task.dueDate && new Date(task.dueDate) < new Date() && !task.completed).length} overdue tasks
+            </span>
+          )}
+          {tasks.filter(task => task.dueDate && new Date(task.dueDate) > new Date() && !task.completed).length > 0 && (
+            <span style={{ color: '#f39c12', marginLeft: '16px' }}>
+              📅 {tasks.filter(task => task.dueDate && new Date(task.dueDate) > new Date() && !task.completed).length} upcoming due dates
+            </span>
+          )}
+        </div>
+      </div>
+
       <form
         onSubmit={handleAdd}
         style={{ display: "flex", gap: 8, flexWrap: "wrap" }}

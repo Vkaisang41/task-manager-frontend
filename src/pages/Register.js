@@ -7,9 +7,14 @@ function Register() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [role, setRole] = useState("user");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+
+  React.useEffect(() => {
+    console.log("TRACKING: User visited Register page");
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -32,7 +37,7 @@ function Register() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ username, password, role }),
       });
 
       if (response.ok) {
@@ -84,6 +89,18 @@ function Register() {
           autoComplete="new-password"
           required
         />
+
+        <label htmlFor="role">Role</label>
+        <select
+          id="role"
+          value={role}
+          onChange={e => setRole(e.target.value)}
+          required
+        >
+          <option value="user">User</option>
+          <option value="manager">Manager</option>
+          <option value="admin">Admin</option>
+        </select>
 
         <button className="button" type="submit" disabled={loading}>
           {loading ? "Registering..." : "Register"}

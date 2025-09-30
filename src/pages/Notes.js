@@ -7,6 +7,7 @@ function Notes() {
   const [input, setInput] = useState("");
 
   useEffect(() => {
+    console.log("TRACKING: User visited Notes page");
     const token = localStorage.getItem('token');
     fetch(`${API_BASE}/api/notes`, {
       headers: {
@@ -20,7 +21,12 @@ function Notes() {
         }
         return res.json();
       })
-      .then((data) => setNotes(Array.isArray(data) ? data : []))
+      .then((data) => {
+        const safeNotes = Array.isArray(data) ? data : [];
+        setNotes(safeNotes);
+        // Check for notifications: incomplete notes (assuming no completion, perhaps based on content)
+        // For now, just log visit
+      })
       .catch(err => console.error(err.message));
   }, []);
 
@@ -103,6 +109,31 @@ function Notes() {
   return (
     <div>
       <h1>Notes</h1>
+
+      {/* Progress Summary */}
+      <div style={{ marginBottom: '16px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+          <span>Notes: {notes.length} total</span>
+          <span>100% complete (all notes available)</span>
+        </div>
+        <div style={{
+          width: '100%',
+          height: '10px',
+          backgroundColor: '#e0e0e0',
+          borderRadius: '5px',
+          overflow: 'hidden'
+        }}>
+          <div style={{
+            width: '100%',
+            height: '100%',
+            backgroundColor: '#9b59b6',
+            transition: 'width 0.3s ease'
+          }}></div>
+        </div>
+        <div style={{ marginTop: '8px', fontSize: '12px', color: '#666' }}>
+          <span>📝 Notes are informational and don't have due dates</span>
+        </div>
+      </div>
       <form onSubmit={handleAdd} style={{ marginBottom: "16px" }}>
         <input
           type="text"

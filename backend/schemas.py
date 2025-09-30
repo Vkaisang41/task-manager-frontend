@@ -2,7 +2,8 @@ from marshmallow import Schema, fields
 
 user_schema = Schema.from_dict({
     "username": fields.Str(required=True),
-    "password": fields.Str(required=True)
+    "password": fields.Str(required=True),
+    "role": fields.Str()
 })()
 
 task_schema = Schema.from_dict({
