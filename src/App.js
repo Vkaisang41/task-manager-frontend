@@ -42,6 +42,14 @@ function App() {
             const tasks = data;
             const incompleteTasks = tasks.filter(task => !task.completed);
             const overdueTasks = tasks.filter(task => task.due_date && new Date(task.due_date) < new Date() && !task.completed);
+            const dueSoonTasks = tasks.filter(task => {
+              if (!task.due_date || task.completed) return false;
+              const dueDate = new Date(task.due_date);
+              const now = new Date();
+              const diffTime = dueDate - now;
+              const diffDays = diffTime / (1000 * 60 * 60 * 24);
+              return diffDays >= 0 && diffDays <= 3; // due in next 3 days
+            });
 
           const notifications = [];
 
@@ -58,6 +66,14 @@ function App() {
               id: 'overdue-tasks',
               message: `You have ${overdueTasks.length} overdue task${overdueTasks.length > 1 ? 's' : ''}!`,
               type: 'error'
+            });
+          }
+
+          if (dueSoonTasks.length > 0) {
+            notifications.push({
+              id: 'due-soon-tasks',
+              message: `You have ${dueSoonTasks.length} task${dueSoonTasks.length > 1 ? 's' : ''} due soon`,
+              type: 'info'
             });
           }
 
